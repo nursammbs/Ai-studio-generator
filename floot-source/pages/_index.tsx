@@ -46,6 +46,6 @@ export default function HomePage() {
       <div className={styles.priceGrid}>{products.map((p, i) => <article key={p.key} className={`${styles.priceCard} ${i === 1 ? styles.featured : ""}`}><div className={styles.priceTag}>{p.tag}</div><h3>{p.name}</h3><div className={styles.price}>{money(p.price)}<small> / sekali</small></div><p className={styles.noSub}>Tanpa langganan berulang.</p><ul>{p.features.map(f => <li key={f}><span>✓</span>{f}</li>)}</ul><Link to={`/pesan-kit?paket=${p.key}`} className={i === 1 ? styles.primary : styles.cardButton}>Pilih {p.name} <span>→</span></Link></article>)}</div>
       <p className={styles.priceNote}>Pembayaran sungguhan aktif setelah pemilik toko menyelesaikan verifikasi merchant dan konfigurasi rekening settlement di Midtrans. Data rekening tidak diminta di halaman pelanggan.</p>
     </section>
-    <footer className={styles.footer}><Link to="/" className={styles.brand}><span className={styles.mark}>cc</span><span><b>CepatCuan</b><small>STUDIO</small></span></Link><span>Alat bantu pembuatan draf. Periksa fakta dan hak penggunaan sebelum publikasi.</span><Link to="/studio">Akses studio →</Link></footer>
+    <footer className={styles.footer}><Link to="/" className={styles.brand}><span className={styles.mark}>cc</span><span><b>CepatCuan</b><small>STUDIO</small></span></Link><span>Alat bantu pembuatan draf. Periksa fakta sebelum publikasi. <Link to="/ketentuan">Ketentuan</Link> · <Link to="/privasi">Privasi</Link></span><Link to="/studio">Akses studio →</Link></footer>
   </main>;
 }
