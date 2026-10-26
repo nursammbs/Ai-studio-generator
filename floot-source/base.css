@@ -1,0 +1,41 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,500;6..72,600&display=swap');
+:root {
+  /* Overlay layers */
+  --z-overlay: 400;
+  --z-spotlight: 1000; /* Tutorial spotlights/guided help */
+  /* System layers */
+  --z-critical: 2000; /* Critical system notifications */
+  /* spacing */
+  --spacing-1: 0.25rem;
+  --spacing-2: 0.5rem;
+  --spacing-3: 0.75rem;
+  --spacing-4: 1rem;
+  --spacing-6: 1.5rem;
+  --spacing-8: 2rem;
+  --spacing-12: 3rem;
+  --spacing-16: 4rem;
+  --spacing-20: 5rem;
+}
+:root {
+  --background: #f5f4ee; --foreground: #202820;
+  --surface: #eeeee5; --surface-foreground: #202820;
+  --sidebar: #e9e9df; --sidebar-foreground: #202820;
+  --card: #fffef9; --card-foreground: #202820;
+  --popup: #fffef9; --popup-foreground: #202820;
+  --primary: #276749; --primary-foreground: #ffffff;
+  --secondary: #e4e9df; --secondary-foreground: #244533;
+  --accent: #d8e8d8; --accent-foreground: #244533;
+  --muted: #e9e8df; --muted-foreground: #6a7268;
+  --success: #26734d; --success-foreground: #ffffff;
+  --error: #b33a32; --error-foreground: #ffffff;
+  --warning: #94651b; --warning-foreground: #ffffff;
+  --info: #315c87; --info-foreground: #ffffff; --info-hover: #274c72; --info-active: #1f3e5e;
+  --border: #d9dbd0;
+  --font-family-base: 'DM Sans', sans-serif; --font-family-display: 'Newsreader', serif;
+  --font-family-monospace: ui-monospace, SFMono-Regular, Menlo, monospace; --font-family-cursive: cursive;
+  --shadow: 0 1px 2px rgba(32,40,32,.04); --shadow-md: 0 8px 24px rgba(32,40,32,.08); --shadow-lg: 0 16px 40px rgba(32,40,32,.12); --shadow-focus: 0 0 0 3px rgba(39,103,73,.2);
+  --radius-sm: 6px; --radius: 10px; --radius-md: 14px; --radius-lg: 20px; --radius-full: 999px;
+  --animation-duration-fast: 120ms; --animation-duration-normal: 180ms; --animation-duration-slow: 260ms;
+  --chart-color-1: #276749; --chart-color-2: #b8793c; --chart-color-3: #6d83a1; --chart-color-4: #8b6a91; --chart-color-5: #7b8671;
+}
+.dark {}
