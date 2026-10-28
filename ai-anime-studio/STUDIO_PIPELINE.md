@@ -123,3 +123,14 @@ No model weights are bundled with this repository. Wan2.2 Animate is a large mod
 The official Wan Animate 2 UI template currently exposes separate inputs on the Motion Transfer subgraph: an appearance/background prompt and a pose/motion prompt. If the exported API workflow preserves these inputs, configure `--positive-node MAIN_NODE_ID --positive-field text` for appearance and `--pose-prompt-node MAIN_NODE_ID --pose-prompt-field text_4` for movement. The actual API export may flatten subgraphs or rename fields; inspect the **API prompt JSON** and replace all placeholder node IDs/fields before queuing a shot. Keep each driving-video clip short enough for the configured workflow: the current template documentation describes 81 frames per Motion Transfer subgraph (~3.4 s at 24 fps), and longer movement requires chaining/extension in the workflow.
 
 After generation completes, `outputs/studio_pipeline/review/index.html` provides human QC. The code checks file decoding and cache validity; it does not automatically approve animation quality.
+
+
+## Find node IDs without guessing
+
+Use the new inspector before starting a long render:
+
+```bash
+python workflow_inspect.py --workflow workflows/wan_animate_api.json --output outputs/workflow_nodes.md
+```
+
+Open `outputs/workflow_nodes.md` and use the exact node IDs and API input names it reports for the appearance prompt, pose prompt, seed, reference image and driving video. If the tool reports that the file is a UI graph (with a nodes array), export **API format** from ComfyUI and run the inspector again on that API JSON. This is particularly useful for Wan Animate 2, whose nested subgraphs can be flattened and assigned different IDs by the installed ComfyUI version.
