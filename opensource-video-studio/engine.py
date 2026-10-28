@@ -287,7 +287,7 @@ def create_video(topic: str, scenes: list[dict[str, str]], sources: list[dict[st
         segments.append(segment)
     concat = job / "concat.txt"
     def quoted(path: Path):
-        return str(path.resolve()).replace("\\\\", "/").replace("'", "'\\\\''")
+        return str(path.resolve()).replace(chr(92), "/")
     concat.write_text("\\n".join("file '" + quoted(p) + "'" for p in segments) + "\\n", encoding="utf-8")
     video = job / "video.mp4"
     subprocess.run([
