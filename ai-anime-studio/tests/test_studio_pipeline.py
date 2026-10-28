@@ -100,6 +100,18 @@ class WorkflowPatchingTests(unittest.TestCase):
         self.assertEqual(second["30"]["inputs"]["driving_clip"], "old.mp4")
         self.assertEqual(self.template["30"]["inputs"]["driving_clip"], "old.mp4")
 
+    def test_patches_separate_appearance_and_pose_prompts(self):
+        self.template["10"]["inputs"]["pose"] = ""
+        patched = studio_pipeline.patch_shot_workflow(
+            self.template, positive_node_id="10", positive_field="prompt_text",
+            seed_node_id="10", seed_field="seed_value", image_node_id="20", image_field="ref_file",
+            positive_prompt="character appearance and background", seed=5, uploaded_image_name="cat.png",
+            pose_prompt_node_id="10", pose_prompt_field="pose", pose_prompt="follow the driving motion",
+        )
+        self.assertEqual(patched["10"]["inputs"]["prompt_text"], "character appearance and background")
+        self.assertEqual(patched["10"]["inputs"]["pose"], "follow the driving motion")
+        self.assertEqual(self.template["10"]["inputs"]["pose"], "")
+
     def test_rejects_invalid_workflow_field(self):
         with self.assertRaisesRegex(ValueError, "no input"):
             studio_pipeline.patch_shot_workflow(
