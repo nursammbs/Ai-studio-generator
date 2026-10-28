@@ -1,40 +1,40 @@
 {
-  "title": "Misi Keju — Wan Animate 2 motion-transfer shots",
+  "title": "Misi Keju yang Hilang — Wan Animate 2 starter shots",
   "language": "id-ID",
-  "style_bible": "polished 2D cel-animation, clean ink contours, warm kitchen palette, expressive cartoon posing, coherent 16:9 composition",
-  "character_bible": "Use the approved gray cartoon cat model sheet: triangular ears, yellow eyes, light muzzle, same head-body proportions and gray markings in every shot.",
-  "background_bible": "Warm animated kitchen with cream cupboards, tiled floor, a small wooden table and a wedge of yellow cheese; consistent layout and palette between cuts.",
-  "negative_prompt": "flicker, identity drift, extra limbs, changing ears or tail, warped face, duplicate character, melting anatomy, jitter, strobing, random cuts, subtitles, text, logo, watermark",
+  "style_bible": "polished 2D family-comedy cel animation, crisp dark ink contours, warm color palette, consistent line weight, expressive eyes and readable silhouettes; no text overlays",
+  "character_bible": "The same gray cat with yellow eyes and triangular pink-inner ears, and the same small orange-brown mouse with oversized pink ears and a long pink tail. Preserve their exact face, fur colors, proportions, markings and scale. The input reference is a two-character composition; keep both characters distinct.",
+  "background_bible": "A warm animated kitchen with cream cupboards, a wooden table, soft daylight, tiled floor and a small wedge of yellow cheese. Maintain coherent room layout and camera direction between shots.",
+  "negative_prompt": "flicker, identity drift, changing fur colors, changing ears or tail, extra limbs, duplicate characters, melted anatomy, warped face, jitter, strobing, abrupt camera teleportation, changing screen direction, text, subtitles, logo, watermark, low resolution",
   "shots": [
     {
       "id": "01_cheese_discovery",
-      "reference_image": "../assets/refs/cat_model_front.png",
-      "motion_video": "../assets/motion/01_sneak_and_peek.mp4",
-      "prompt": "A short sneaking movement followed by a curious head turn and wide-eyed pause. Follow the driving video's movement and timing, keep the face readable.",
+      "reference_image": "../assets/refs/01_cheese_discovery.png",
+      "motion_video": "../assets/motion/01_cheese_discovery.mp4",
+      "prompt": "A curious cat spots a mouse near a wedge of cheese in a warm animated kitchen; subtle approach, small head turn and a readable pause before the chase. Follow the guide timing and preserve both characters.",
       "seed": 41001,
       "speed": 0.94
     },
     {
       "id": "02_chase_start",
-      "reference_image": "../assets/refs/cat_model_fullbody.png",
-      "motion_video": "../assets/motion/02_run_and_skid.mp4",
-      "prompt": "A quick run toward screen right, arms and legs cycle rapidly, then a comic skid and sharp look back. Preserve left-to-right screen direction.",
+      "reference_image": "../assets/refs/02_chase_start.png",
+      "motion_video": "../assets/motion/02_chase_start.mp4",
+      "prompt": "The cat and mouse sprint from left to right across the kitchen, energetic run cycles and a brief comic skid at the end. Preserve the left-to-right screen direction and keep both silhouettes readable.",
       "seed": 41002,
-      "speed": 1.12
+      "speed": 1.08
     },
     {
       "id": "03_kitchen_chaos",
-      "reference_image": "../assets/refs/cat_model_fullbody.png",
-      "motion_video": "../assets/motion/03_jump_and_land.mp4",
-      "prompt": "An exaggerated anticipatory crouch, a short leap, then a squashy landing and an embarrassed blink. Use the provided motion timing.",
+      "reference_image": "../assets/refs/03_kitchen_chaos.png",
+      "motion_video": "../assets/motion/03_kitchen_chaos.mp4",
+      "prompt": "The cat makes an exaggerated leap and squashy landing while the mouse dashes away with the cheese; comic anticipation, clear impact beat and readable silhouette.",
       "seed": 41003,
-      "speed": 1.0
+      "speed": 1
     },
     {
       "id": "04_final_gag",
-      "reference_image": "../assets/refs/cat_model_front.png",
-      "motion_video": "../assets/motion/04_surprised_reaction.mp4",
-      "prompt": "Hold a readable surprised reaction, eyes widening and ears raising, then slowly glance toward a wedge of cheese just out of frame.",
+      "reference_image": "../assets/refs/04_final_gag.png",
+      "motion_video": "../assets/motion/04_final_gag.mp4",
+      "prompt": "The cat freezes in comic surprise as the mouse guards the cheese. Ease into a final readable pose, eyes widen, then hold the punchline.",
       "seed": 41004,
       "speed": 0.9
     }

@@ -74,7 +74,7 @@ python studio_pipeline.py \
   --project examples/shotlist.example.json \
   --workflow workflows/wan_animate_api.json \
   --positive-node 6 --seed-node 3 --image-node 56 \
-  --motion-video-node 58 --motion-video-field video \
+  --motion-video-node 58 --motion-video-field file \
   --comfy-input-dir /path/to/ComfyUI/input \
   --output outputs/episode_animate.mp4
 ```
@@ -104,7 +104,7 @@ python studio_pipeline.py \
   --pose-prompt-node MAIN_NODE_ID --pose-prompt-field text_4 \
   --seed-node SAMPLER_NODE_ID --seed-field seed \
   --image-node LOAD_IMAGE_NODE_ID --image-field image \
-  --motion-video-node LOAD_VIDEO_NODE_ID --motion-video-field video \
+  --motion-video-node LOAD_VIDEO_NODE_ID --motion-video-field file \
   --comfy-input-dir /path/to/ComfyUI/input \
   --output outputs/episode_final.mp4 --force
 ```
@@ -134,3 +134,27 @@ python workflow_inspect.py --workflow workflows/wan_animate_api.json --output ou
 ```
 
 Open `outputs/workflow_nodes.md` and use the exact node IDs and API input names it reports for the appearance prompt, pose prompt, seed, reference image and driving video. If the tool reports that the file is a UI graph (with a nodes array), export **API format** from ComfyUI and run the inspector again on that API JSON. This is particularly useful for Wan Animate 2, whose nested subgraphs can be flattened and assigned different IDs by the installed ComfyUI version.
+
+
+## Starter assets ready to test
+
+The downloadable **Wan Animate 2 Motion-Transfer Starter Kit** contains four matching 832×480 reference compositions and driving clips (81 frames at 24 fps) for the example manifest. These are deliberately simple 2D puppet/blocking guides from the existing cat/mouse sprite art—not final AI-generated animation. They give the pipeline actual input files so you can test node mapping and continuity one shot at a time.
+
+Copy the kit's `ai-anime-studio/assets/refs/`, `ai-anime-studio/assets/motion/`, and `ai-anime-studio/examples/shotlist.motion_reference.example.json` into the corresponding paths in this repository. Do not overwrite `engine.py` or `studio_pipeline.py` when copying the assets. The reference images are paired with matching first-frame compositions from each driving video.
+
+### Wan Animate 2 field names
+
+In the current Comfy-Org UI template, the top-level **LoadVideo** node's filename input is usually `file` (the driving video itself is passed to the Motion Transfer subgraph's `video` input). Motion Transfer exposes a main appearance/background prompt and a separate pose prompt. In this pipeline, the input names are configurable; set `--motion-video-node` to the LoadVideo node ID and `--motion-video-field file`, but only after checking the API JSON report. The subgraph's `text` and `text_4` fields are the current UI template's prompt labels, not guaranteed API field names after export. The sampler seed node may also be internal; select the actual node/field reported by the API inspector.
+
+**Important:** the official UI workflow is not itself an API prompt. Export API format in ComfyUI, inspect it with `workflow_inspect.py`, then do a single-shot validation. The script cannot infer hidden/nested node mappings that the export did not expose.
+
+
+## Recreate the starter guides locally
+
+Place the two transparent pose sheets from the starter kit in `ai-anime-studio/assets/source/`, then run from the `ai-anime-studio/` folder:
+
+```bash
+python generate_motion_guides.py
+```
+
+The generator writes the four PNG reference frames and four 81-frame MP4 blocking guides to `assets/refs/` and `assets/motion/`. It is deterministic sprite/cutout animation for motion-reference testing; it does not run an AI video model.

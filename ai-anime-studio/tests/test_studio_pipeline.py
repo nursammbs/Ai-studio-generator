@@ -7,6 +7,8 @@ from pathlib import Path
 
 import studio_pipeline
 import workflow_inspect
+import generate_motion_guides
+from PIL import Image, ImageDraw
 
 
 class ProjectParsingTests(unittest.TestCase):
@@ -165,6 +167,39 @@ class WorkflowInspectorTests(unittest.TestCase):
         self.assertEqual(fmt, "ui")
         self.assertIn("not the API prompt format", report)
         self.assertIn("text_4", report)
+
+
+class MotionGuideGeneratorTests(unittest.TestCase):
+    def test_crop_pose_extracts_visible_sprite_from_one_quadrant(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "sheet.png"
+            sheet = Image.new("RGBA", (200, 100), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(sheet)
+            draw.rectangle((12, 12, 75, 42), fill=(220, 30, 40, 255))
+            draw.rectangle((120, 12, 175, 42), fill=(20, 180, 60, 255))
+            draw.rectangle((12, 62, 75, 92), fill=(40, 60, 230, 255))
+            draw.rectangle((120, 62, 175, 92), fill=(230, 180, 40, 255))
+            sheet.save(path)
+            pose = generate_motion_guides.crop_pose(path, 0)
+            self.assertEqual(pose.mode, "RGBA")
+            self.assertIsNotNone(pose.getchannel("A").getbbox())
+            self.assertGreater(pose.width, 60)
+
+    def test_scene_frame_is_valid_832_by_480_rgb_image(self):
+        cat = Image.new("RGBA", (200, 100), (110, 125, 145, 255))
+        mouse = Image.new("RGBA", (120, 70), (170, 120, 90, 255))
+        frame = generate_motion_guides.scene_frame(
+            "02_chase_start", 1.0, [cat] * 4, [mouse] * 4
+        )
+        self.assertEqual(frame.size, (832, 480))
+        self.assertEqual(frame.mode, "RGB")
+        self.assertEqual(frame.getpixel((0, 0)), (228, 231, 230))
+
+    def test_unknown_scene_fails_explicitly(self):
+        cat = Image.new("RGBA", (20, 20), (255, 0, 0, 255))
+        mouse = Image.new("RGBA", (20, 20), (0, 255, 0, 255))
+        with self.assertRaisesRegex(ValueError, "Unknown scene"):
+            generate_motion_guides.scene_frame("unused", 0.0, [cat] * 4, [mouse] * 4)
 
 
 class ReviewBundleTests(unittest.TestCase):

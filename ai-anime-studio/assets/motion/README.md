@@ -1,7 +1,12 @@
-# Motion guide inputs
+# Driving-video inputs for Wan Animate 2
 
-Place short, licensed motion-guide clips here. For Wan Animate 2, keep each guide close to the intended shot duration (the upstream template documents 81 frames, about 3.4 seconds at 24 fps per Motion Transfer subgraph), with one clear action and framing comparable to the character reference image.
+The example manifest expects these files, all 832×480, 24 fps, 81 frames (~3.375 seconds), without audio:
 
-Suggested filenames: `01_sneak_and_peek.mp4`, `02_run_and_skid.mp4`, `03_jump_and_land.mp4`, `04_surprised_reaction.mp4`.
+- `01_cheese_discovery.mp4`
+- `02_chase_start.mp4`
+- `03_kitchen_chaos.mp4`
+- `04_final_gag.mp4`
 
-These files are *inputs to generate the cartoon character animation*, not final animated shots. They must exist on the same machine/network-accessible filesystem as the project. The pipeline copies them to ComfyUI's `input/` folder if `--comfy-input-dir` is supplied. Only use footage you own or have permission to use.
+They are included in the downloadable **Wan Animate 2 Motion-Transfer Starter Kit**. The clips are deterministic 2D sprite/cutout blocking guides—not live-action footage or model-generated final shots. Use them to validate the ComfyUI mapping and rough motion direction, then replace or refine them with higher-quality motion references when necessary.
+
+The pipeline copies each selected driving video into the ComfyUI `input/` directory when `--comfy-input-dir` is supplied. That path must be the real input folder on the machine running ComfyUI. Only use motion references you own or have permission to use.
