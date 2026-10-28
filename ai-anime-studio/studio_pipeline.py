@@ -123,6 +123,26 @@ def load_project(path: Path) -> tuple[dict[str, Any], list[Shot]]:
         shots.append(Shot(sid, ref, prompt, seed, speed, src, motion))
     return data, shots
 
+ 
+
+def select_shots(shots: list[Shot], *, only_shot: str | None = None,
+                 limit_shots: int | None = None) -> list[Shot]:
+    """Select a deterministic subset so a GPU smoke test does not render every scene."""
+    if only_shot and limit_shots is not None:
+        raise ValueError("Choose either only_shot or limit_shots, not both.")
+    selected = shots
+    if only_shot:
+        selected = [shot for shot in shots if shot.id == only_shot]
+        if not selected:
+            raise ValueError(f"Shot ID not found: {only_shot}")
+    if limit_shots is not None:
+        if limit_shots < 1:
+            raise ValueError("limit_shots must be at least 1")
+        selected = selected[:limit_shots]
+    if not selected:
+        raise ValueError("Shot selection is empty.")
+    return selected
+
 def generate(project: dict[str, Any], shots: list[Shot], workflow_path: Path, base_url: str,
              positive_id: str, seed_id: str | None, image_id: str, negative_id: str | None,
              output_dir: Path, timeout: int, motion_id: str | None = None,
@@ -377,13 +397,10 @@ def main(argv: list[str] | None = None) -> int:
     a = p.parse_args(argv)
     if a.width < 320 or a.height < 180 or not 12 <= a.fps <= 60: p.error("Use at least 320x180 and 12–60 FPS")
     project, shots = load_project(a.project)
-    if a.only_shot:
-        selected = [shot for shot in shots if shot.id == a.only_shot]
-        if not selected: p.error(f"Shot ID not found: {a.only_shot}")
-        shots = selected
-    if a.limit_shots is not None:
-        if a.limit_shots < 1: p.error("--limit-shots must be at least 1")
-        shots = shots[:a.limit_shots]
+    try:
+        shots = select_shots(shots, only_shot=a.only_shot, limit_shots=a.limit_shots)
+    except ValueError as exc:
+        p.error(str(exc))
     a.work_dir.mkdir(parents=True,exist_ok=True)
     if a.assemble_only:
         if any(not s.source_video for s in shots): p.error("--assemble-only requires source_video for every shot")
