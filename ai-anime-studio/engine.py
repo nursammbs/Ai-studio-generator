@@ -200,7 +200,7 @@ def render_offline_animatic(output_path: str | Path, *, width: int = 960, height
         for cx,cy in [(120,84),(650,105),(830,67)]:
             for ox,oy,r in [(-24,4,20),(0,-8,25),(25,5,19)]:
                 d.ellipse((cx+ox-r,cy+oy-r,cx+ox+r,cy+oy+r),fill=(248,251,255))
-        d.line([(0,int(height*.67),(width),int(height*.67))], fill=(67,130,68), width=3)
+        d.line([(0,int(height*.67)),(width,int(height*.67))], fill=(67,130,68), width=3)
         if scene == 0:
             cat_x, mouse_x = 150+30*math.sin(local*1.5), 690+8*math.sin(local*3)
             cat_y, caption, surprised = 346+4*math.sin(local*4), "SCENE 1 — A curious cat spots a mouse", False
