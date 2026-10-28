@@ -73,3 +73,28 @@ python sprite_animator.py --sheet assets/character_sheet.png --output output.mp4
 ```
 
 **Capability boundary:** this is AI-art-assisted 2D sprite/cutout animation, not a diffusion text-to-video result or frame-by-frame anime animation. The actual video in the pilot package was rendered and decode-tested. The separate ComfyUI connection remains the path toward testing a real Wan image-to-video workflow; that still requires a running ComfyUI instance and compatible model weights.
+
+
+## Quick start: real image-to-video with Wan 2.2
+
+The official ComfyUI workflow library provides Wan 2.2 text-to-video and image-to-video templates. Start with the **Wan 2.2 5B Video Generation** template for a smaller model than the 14B I2V workflow. Official references:
+- Template workflow JSON: https://github.com/Comfy-Org/workflow_templates/blob/main/templates/video_wan2_2_5B_ti2v.json
+- Official guide: https://docs.comfy.org/tutorials/video/wan/wan2_2
+- Model package: https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged
+
+### Model files
+
+The template references a roughly 9.31 GB diffusion model (`wan2.2_ti2v_5B_fp16.safetensors`), a 1.31 GB VAE (`wan2.2_vae.safetensors`) and a 6.27 GB text encoder (`umt5_xxl_fp8_e4m3fn_scaled.safetensors`). Check the latest official model card for exact files and sizes before downloading.
+
+### Wiring the app to an I2V workflow
+
+1. In ComfyUI, open the official Wan 2.2 5B template, make sure all model files are present, and run it once directly in ComfyUI. The template can be used in image-to-video mode by enabling the input-image path; use the template instructions for your ComfyUI version.
+2. Export the working graph as **API format** from ComfyUI.
+3. In this app, upload that JSON under “Workflow API image-to-video”. Default node IDs match the official UI template's typical IDs (positive prompt `6`, KSampler `3`, Load Image `56`), but always inspect the API export and change them if it differs.
+4. Set the positive prompt to describe both the action and camera motion, e.g. “same gray cartoon cat character, takes three quick running steps to the right, tail swishes, side tracking camera, preserve the supplied character design”.
+5. Upload a separate, working text-to-image API workflow in the first workflow field to generate the scene stills. Then click “Generate 3 gambar AI + video”. The app will render the stills, run the I2V graph once per scene, and concatenate the returned clips.
+6. Review each clip for character drift, malformed movement, and continuity before publishing.
+
+### Important boundary
+
+This is the actual path for **generative motion**. However, a successful unit test only verifies API request construction and video stitching, not that a local GPU has enough memory or that a real Wan inference succeeds. The first real inference must be run on the target ComfyUI machine; if VRAM is insufficient, start with lower output resolution/frame count or use a GPU/cloud environment you control. This repository does not silently use a paid cloud service.
