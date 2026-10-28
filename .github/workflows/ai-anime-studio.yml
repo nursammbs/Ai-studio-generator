@@ -30,6 +30,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg
       - name: Compile Python files
-        run: python -m py_compile app.py engine.py sprite_animator.py sprite_animator_v2.py youtube_upload.py studio_pipeline.py workflow_inspect.py
+        run: python -m py_compile app.py engine.py sprite_animator.py sprite_animator_v2.py youtube_upload.py studio_pipeline.py workflow_inspect.py generate_motion_guides.py
       - name: Run tests
         run: python -m pytest -q
