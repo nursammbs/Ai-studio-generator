@@ -98,3 +98,29 @@ The template references a roughly 9.31 GB diffusion model (`wan2.2_ti2v_5B_fp16.
 ### Important boundary
 
 This is the actual path for **generative motion**. However, a successful unit test only verifies API request construction and video stitching, not that a local GPU has enough memory or that a real Wan inference succeeds. The first real inference must be run on the target ComfyUI machine; if VRAM is insufficient, start with lower output resolution/frame count or use a GPU/cloud environment you control. This repository does not silently use a paid cloud service.
+
+
+## YouTube upload (optional, OAuth-based)
+
+There is now a one-step upload form at the bottom of the local Streamlit app and a CLI helper at `youtube_upload.py`. The upload helper uses the official YouTube Data API resumable upload flow.
+
+**Safe defaults:** it uploads only when you click the explicit upload button (or explicitly run the CLI), and the default visibility is **private**. To publish publicly, select `public` and type `PUBLISH-PUBLIC` in the confirmation field. Review metadata and audience setting before upload. No video has been uploaded on your behalf.
+
+### Google OAuth setup
+1. Open Google Cloud Console and create/select a project.
+2. Enable **YouTube Data API v3**.
+3. Configure OAuth consent screen and create an OAuth client ID of type **Desktop app**.
+4. Download the OAuth JSON and upload it in the app. Do not commit it to GitHub or send it in chat.
+5. Run the app locally; Google login opens in a browser and a local token is saved under ignored `outputs/`.
+
+### Upload from the command line
+```bash
+python youtube_upload.py --file outputs/final.mp4 --title "My cartoon short" --description "Original AI-assisted cartoon." --tags "animation,cartoon,AI" --dry-run
+python youtube_upload.py --file outputs/final.mp4 --title "My cartoon short" --description "Original AI-assisted cartoon." --tags "animation,cartoon,AI"
+```
+
+The second command uploads as **private** by default. After checking the video in YouTube Studio, explicitly opt into unlisted or public when you are ready. Public upload requires an extra typed confirmation in the CLI. The account may still need to finish channel verification or any platform-required checks.
+
+Official references:
+- https://developers.google.com/youtube/v3/guides/uploading_a_video
+- https://developers.google.com/youtube/v3/docs/videos/insert
