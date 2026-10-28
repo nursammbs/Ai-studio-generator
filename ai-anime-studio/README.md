@@ -164,3 +164,6 @@ The example manifest now points to four reference compositions and driving-video
 
 
 The starter kit includes `generate_motion_guides.py`, a deterministic renderer for four reference/composition frames and matching 81-frame driving videos. Place `cat_running_sheet_clean.png` and `mouse_running_sheet_clean.png` in `assets/source/`, then run `python generate_motion_guides.py`. These are blocking guides, not Wan-generated final animation.
+
+
+Before queueing a full episode, use `--limit-shots 1` to make a one-shot smoke test. Use `--only-shot 03_kitchen_chaos` to rerun a specific scene. `--seed-node` is optional for API graphs that do not expose a seed input; without it, the workflow's saved seed remains unchanged. These options help test workflow/node mapping without spending GPU quota on all shots at once.
