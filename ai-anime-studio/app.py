@@ -28,7 +28,7 @@ with st.sidebar:
     workflow_file = st.file_uploader("Upload workflow JSON format API", type=["json"])
     st.caption("Di ComfyUI, buka workflow text-to-image yang bekerja lalu pilih Export → API.")
     video_workflow_file = st.file_uploader("Workflow API image-to-video (opsional)", type=["json"], key="video_workflow")
-    st.caption("Workflow I2V harus sudah teruji di ComfyUI. Upload di sini untuk membuat klip bergerak dari gambar adegan.")
+    st.caption("Untuk template resmi Wan 2.2 5B, node API biasanya: positive prompt 6, KSampler seed 3, Load Image 56. Verifikasi ID di workflow API yang kamu ekspor.")
 
 left, right = st.columns(2)
 with left:
@@ -63,7 +63,7 @@ with right:
     st.write("Node IDs workflow image-to-video (opsional)")
     video_positive_id = st.text_input("ID prompt positif I2V", value="6")
     video_seed_id = st.text_input("ID seed I2V", value="3")
-    video_image_id = st.text_input("ID node Load Image I2V", value="10")
+    video_image_id = st.text_input("ID node Load Image I2V", value="56")
 
 st.divider()
 st.subheader("3. Ubah storyboard AI menjadi video")
