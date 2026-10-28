@@ -64,7 +64,9 @@ def patch_shot_workflow(workflow: dict[str, Any], *, positive_node_id: str,
                         uploaded_image_name: str, negative_node_id: str | None = None,
                         negative_field: str = "text", negative_prompt: str = "",
                         motion_node_id: str | None = None, motion_field: str = "video",
-                        motion_filename: str | None = None) -> dict[str, Any]:
+                        motion_filename: str | None = None,
+                        pose_prompt_node_id: str | None = None, pose_prompt_field: str = "text_4",
+                        pose_prompt: str | None = None) -> dict[str, Any]:
     """Patch a fresh API workflow copy; field names are configurable for different ComfyUI nodes."""
     patched = copy.deepcopy(workflow)
     def set_input(node_id: str, field: str, value: Any) -> None:
@@ -83,6 +85,10 @@ def patch_shot_workflow(workflow: dict[str, Any], *, positive_node_id: str,
         if not motion_node_id:
             raise ValueError("A motion filename requires motion_node_id")
         set_input(motion_node_id, motion_field, motion_filename)
+    if pose_prompt is not None:
+        if not pose_prompt_node_id:
+            raise ValueError("A pose prompt requires pose_prompt_node_id")
+        set_input(pose_prompt_node_id, pose_prompt_field, pose_prompt)
     return patched
 
 
@@ -122,13 +128,15 @@ def generate(project: dict[str, Any], shots: list[Shot], workflow_path: Path, ba
              motion_field: str = "video", comfy_input_dir: Path | None = None,
              positive_field: str = "text", seed_field: str = "seed",
              image_field: str = "image", negative_field: str = "text",
-             force: bool = False) -> list[Path]:
+             force: bool = False, pose_prompt_id: str | None = None,
+             pose_prompt_field: str = "text_4") -> list[Path]:
     """Generate resumable shots from a ComfyUI API workflow and approved reference assets."""
     if ComfyUIClient is None:
         raise RuntimeError("engine.py belum tersedia. Jalankan script dari folder ai-anime-studio.")
     workflow_template = json.loads(workflow_path.read_text(encoding="utf-8"))
     style = str(project.get("style_bible", "premium 2D cel animation, consistent ink, expressive readable silhouettes"))
     characters = str(project.get("character_bible", "Preserve identity, colors, proportions and face from each reference image"))
+    background = str(project.get("background_bible", "A coherent background consistent with the shot and the established series art direction"))
     negative = str(project.get("negative_prompt", "flicker, identity drift, extra limbs, malformed anatomy, duplicate character, text, watermark"))
     uses_motion = any(shot.motion_video for shot in shots)
     if uses_motion and not (motion_id and comfy_input_dir):
@@ -148,15 +156,25 @@ def generate(project: dict[str, Any], shots: list[Shot], workflow_path: Path, ba
         "seed_node":str(seed_id),"seed_field":seed_field,"image_node":str(image_id),
         "image_field":image_field,"negative_node":str(negative_id or ""),
         "negative_field":negative_field,"motion_node":str(motion_id or ""),
-        "motion_field":motion_field}
+        "motion_field":motion_field,"pose_prompt_node":str(pose_prompt_id or ""),
+        "pose_prompt_field":pose_prompt_field}
     for i, shot in enumerate(shots, 1):
         if not shot.reference_image.is_file():
             raise FileNotFoundError(f"Reference image for generated shot '{shot.id}' missing: {shot.reference_image}")
-        prompt = (f"{style}. Character continuity: {characters}. Shot action: {shot.prompt}. "
-                  "Keep identity stable from first to last frame; clear silhouettes, deliberate anticipation and follow-through, "
-                  "smooth animation timing, no camera teleporting.")
+        if pose_prompt_id:
+            # Wan Animate 2 separates appearance/background from the movement in the driving video.
+            prompt = (f"{style}. Character appearance: {characters}. Background: {background}. "
+                      "Keep the exact reference character design, colors and proportions; consistent clean 2D cel-animation art direction.")
+            pose_prompt = (f"{shot.prompt}. Follow the body motion, timing and expressions in the supplied driving video; "
+                           "preserve the character's identity and silhouette.")
+        else:
+            prompt = (f"{style}. Character continuity: {characters}. Background: {background}. Shot action: {shot.prompt}. "
+                      "Keep identity stable from first to last frame; clear silhouettes, deliberate anticipation and follow-through, "
+                      "smooth animation timing, no camera teleporting.")
+            pose_prompt = None
         fingerprint = shot_fingerprint(shot, workflow_path, style=style, characters=characters,
-                                       negative=negative, node_config=node_config)
+                                       negative=negative, node_config={**node_config,"background":background,
+                                       "pose_prompt":shot.prompt if pose_prompt_id else ""})
         candidates = [raw_dir / f"{i:02d}_{shot.id}.mp4", raw_dir / f"{i:02d}_{shot.id}.gif"]
         if not force:
             for candidate in candidates:
@@ -192,6 +210,8 @@ def generate(project: dict[str, Any], shots: list[Shot], workflow_path: Path, ba
             positive_prompt=prompt, seed=shot.seed, uploaded_image_name=uploaded_image_name,
             negative_node_id=negative_id, negative_field=negative_field, negative_prompt=negative,
             motion_node_id=motion_id, motion_field=motion_field, motion_filename=motion_filename,
+            pose_prompt_node_id=pose_prompt_id, pose_prompt_field=pose_prompt_field,
+            pose_prompt=pose_prompt,
         )
         print(f"[{i}/{len(shots)}] Generating {shot.id}, seed={shot.seed}")
         prompt_id = client.submit(patched)
@@ -338,6 +358,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--negative-node"); p.add_argument("--negative-field", default="text")
     p.add_argument("--motion-video-node", help="Optional video-loader node ID for a driving motion video")
     p.add_argument("--motion-video-field", default="video", help="Input name on the video-loader node; inspect your API workflow")
+    p.add_argument("--pose-prompt-node", help="Optional node ID for a separate driving-motion prompt (Wan Animate 2)")
+    p.add_argument("--pose-prompt-field", default="text_4", help="Pose prompt input field on that node; inspect API workflow")
     p.add_argument("--force", action="store_true", help="Regenerate all shots even if cache fingerprint matches")
     p.add_argument("--skip-review", action="store_true", help="Do not create the HTML/contact-sheet QC bundle")
     p.add_argument("--comfy-input-dir", type=Path, help="ComfyUI/input directory on the machine running ComfyUI")
@@ -355,7 +377,8 @@ def main(argv: list[str] | None = None) -> int:
         if not all((a.workflow,a.positive_node,a.seed_node,a.image_node)): p.error("Generation needs --workflow, --positive-node, --seed-node, --image-node")
         raws = generate(project,shots,a.workflow,a.comfy_url,a.positive_node,a.seed_node,a.image_node,a.negative_node,
             a.work_dir,a.timeout,a.motion_video_node,a.motion_video_field,a.comfy_input_dir,
-            a.positive_field,a.seed_field,a.image_field,a.negative_field,a.force)
+            a.positive_field,a.seed_field,a.image_field,a.negative_field,a.force,
+            a.pose_prompt_node,a.pose_prompt_field)
     normalized = []
     for i,(shot,raw) in enumerate(zip(shots,raws),1):
         dst=a.work_dir/"normalized"/f"{i:02d}_{shot.id}.mp4"
