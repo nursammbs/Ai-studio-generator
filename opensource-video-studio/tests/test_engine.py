@@ -1,9 +1,4 @@
-from engine import fallback_scenes_for_test, _split_sentences
-
-
-def _split_sentences(text):
-    import re
-    return [part.strip() for part in re.split(r"(?<=[.!?])\s+", text.strip()) if part.strip()]
+from engine import fallback_scenes_for_test
 
 
 def test_fallback_scene_count_and_shape():
