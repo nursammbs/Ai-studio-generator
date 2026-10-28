@@ -25,7 +25,7 @@ Windows: install Python and FFmpeg, and add FFmpeg's bin folder to PATH. macOS u
 
 Optional local model: install Ollama, then run: ollama pull qwen2.5:3b
 
-From this folder, create a virtual environment, activate it, then run:
+Quick launch: Windows users can double-click run_windows.bat after Python and FFmpeg are installed. macOS/Linux users can run bash run_unix.sh. To install manually, from this folder create a virtual environment, activate it, then run:
 
     python -m venv .venv
     # Windows PowerShell: .venv\Scripts\Activate.ps1
