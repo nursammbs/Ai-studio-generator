@@ -205,3 +205,59 @@ with st.expander("Petunjuk mode AI dan batasannya"):
 
 **Batasan:** aplikasi menghasilkan tiga gambar lalu mengubahnya menjadi animatic pan/zoom. Ia belum membuat gerakan tubuh penuh. Prompt karakter yang sama membantu, tetapi tidak menjamin identitas visual konsisten. Untuk itu gunakan workflow referensi karakter (misalnya IP-Adapter/ControlNet) yang sesuai dengan model dan uji hasilnya.
 """)
+
+
+st.divider()
+st.subheader("4. Upload hasil ke YouTube")
+st.caption("Upload memakai OAuth Google milikmu. Default visibilitas PRIVATE; publikasi tidak dilakukan otomatis. Gunakan ini hanya saat aplikasi berjalan lokal, karena OAuth membuka browser pada komputer yang menjalankan aplikasi.")
+with st.form("youtube_upload_form"):
+    yt_title = st.text_input("Judul YouTube", value="Kejarkejaran di Taman | AI Cartoon Short")
+    yt_description = st.text_area(
+        "Deskripsi",
+        value="Kartun pendek AI-assisted yang dibuat dengan AI Anime Studio.\n\n#animation #cartoon #aianimation",
+        height=110,
+    )
+    yt_tags = st.text_input("Tag (pisahkan dengan koma)", value="kartun, animasi, AI animation, cartoon short")
+    yt_privacy = st.selectbox("Visibilitas", options=["private", "unlisted", "public"], index=0)
+    yt_kids = st.selectbox("Audiens anak", options=["Belum ditentukan", "Made for kids", "Not made for kids"], index=0)
+    oauth_json = st.file_uploader("Upload OAuth client_secrets.json dari Google Cloud Console", type=["json"], key="youtube_oauth")
+    public_confirmation = ""
+    if yt_privacy == "public":
+        public_confirmation = st.text_input("Ketik PUBLISH-PUBLIC untuk mengonfirmasi publikasi", value="")
+    upload_clicked = st.form_submit_button("Upload video ke YouTube")
+
+if upload_clicked:
+    target_video = Path(st.session_state.get("last_video", ""))
+    if not target_video.exists():
+        st.error("Buat atau pilih video final dahulu.")
+    elif oauth_json is None:
+        st.error("Unggah file OAuth client_secrets.json milikmu dahulu. Jangan pernah bagikan file ini ke orang lain.")
+    elif yt_privacy == "public" and public_confirmation != "PUBLISH-PUBLIC":
+        st.error("Upload publik dibatalkan. Konfirmasi harus persis PUBLISH-PUBLIC.")
+    else:
+        try:
+            import json as _json
+            from youtube_upload import _load_google_client, build_video_resource, upload_video
+            oauth_path = OUTPUT_DIR / "client_secrets.json"
+            oauth_data = _json.loads(oauth_json.getvalue().decode("utf-8"))
+            if not isinstance(oauth_data, dict) or not any(k in oauth_data for k in ("installed", "web")):
+                raise ValueError("File bukan OAuth client JSON standar Google (butuh key installed atau web).")
+            oauth_path.write_text(_json.dumps(oauth_data), encoding="utf-8")
+            made_for_kids = None if yt_kids == "Belum ditentukan" else yt_kids == "Made for kids"
+            resource = build_video_resource(
+                yt_title, yt_description,
+                [tag.strip() for tag in yt_tags.split(",") if tag.strip()],
+                privacy=yt_privacy, category_id="1", made_for_kids=made_for_kids,
+            )
+            token_path = OUTPUT_DIR / ".youtube_token.json"
+            with st.spinner("Membuka login Google, lalu mengunggah video secara resumable..."):
+                youtube = _load_google_client(oauth_path, token_path)
+                result = upload_video(youtube, target_video, resource)
+            st.success(f"Upload selesai: {result['url']}")
+            st.session_state["last_youtube_upload"] = result
+        except Exception as exc:
+            st.error(f"Upload YouTube gagal: {exc}")
+
+if st.session_state.get("last_youtube_upload"):
+    result = st.session_state["last_youtube_upload"]
+    st.link_button("Buka video di YouTube", result.get("url", "https://www.youtube.com"))
