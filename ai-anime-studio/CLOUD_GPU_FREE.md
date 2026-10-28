@@ -14,56 +14,56 @@ The official ComfyUI Wan Animate 2 workflow uses a 15.51 GB diffusion model, 6.2
 
 In a GPU-enabled VM terminal:
 
-\`\`\`bash
+```bash
 git clone https://github.com/nursammbs/Ai-studio-generator.git
 cd Ai-studio-generator
 bash ai-anime-studio/cloud_gpu/bootstrap_comfyui.sh
-\`\`\`
+```
 
 The script clones/updates official ComfyUI, installs requirements, downloads the current official Wan Animate 2 workflow template and checks detected GPU memory. It does not download huge model weights unless you ask for them.
 
 After checking the disk and GPU:
 
-\`\`\`bash
+```bash
 bash ai-anime-studio/cloud_gpu/bootstrap_comfyui.sh --with-wan-animate2
-\`\`\`
+```
 
 To start the UI:
 
-\`\`\`bash
+```bash
 COMFY_HOST=127.0.0.1 bash ai-anime-studio/cloud_gpu/bootstrap_comfyui.sh --start
-\`\`\`
+```
 
 Use the cloud provider's authenticated port-forwarding feature for port 8188. Do **not** expose an unauthenticated ComfyUI port to the public internet. If the provider's proxy requires another listen address, follow its port-forwarding/security instructions and restrict access.
 
-The workflow template is saved at \`~/ComfyUI/user/default/workflows/video_wan_animate2.json\`. Load it in ComfyUI, confirm that all models and input clips resolve, then export as **API format**. The UI graph is not the API prompt dictionary expected by the pipeline.
+The workflow template is saved at `~/ComfyUI/user/default/workflows/video_wan_animate2.json`. Load it in ComfyUI, confirm that all models and input clips resolve, then export as **API format**. The UI graph is not the API prompt dictionary expected by the pipeline.
 
 ### Connect it to the existing project
 
-Copy the separate starter-kit assets into \`ai-anime-studio/assets/refs/\` and \`ai-anime-studio/assets/motion/\`. Then inspect your API export:
+Copy the separate starter-kit assets into `ai-anime-studio/assets/refs/` and `ai-anime-studio/assets/motion/`. Then inspect your API export:
 
-\`\`\`bash
+```bash
 cd ai-anime-studio
 python workflow_inspect.py --workflow workflows/wan_animate2_api.json --output outputs/workflow_nodes.md
-\`\`\`
+```
 
 Use the exact node IDs and fields reported, then run only one shot (all IDs here are placeholders):
 
-\`\`\`bash
-python studio_pipeline.py \\
-  --project examples/shotlist.motion_reference.example.json \\
-  --workflow workflows/wan_animate2_api.json \\
-  --positive-node MAIN_NODE_ID --positive-field text \\
-  --pose-prompt-node MOTION_NODE_ID --pose-prompt-field text_4 \\
-  --image-node LOAD_IMAGE_NODE_ID --image-field image \\
-  --motion-video-node LOAD_VIDEO_NODE_ID --motion-video-field file \\
-  --comfy-input-dir "$HOME/ComfyUI/input" \\
+```bash
+python studio_pipeline.py \
+  --project examples/shotlist.motion_reference.example.json \
+  --workflow workflows/wan_animate2_api.json \
+  --positive-node MAIN_NODE_ID --positive-field text \
+  --pose-prompt-node MOTION_NODE_ID --pose-prompt-field text_4 \
+  --image-node LOAD_IMAGE_NODE_ID --image-field image \
+  --motion-video-node LOAD_VIDEO_NODE_ID --motion-video-field file \
+  --comfy-input-dir "$HOME/ComfyUI/input" \
   --limit-shots 1 --output outputs/smoke_test.mp4 --force
-\`\`\`
+```
 
-Replace **every** placeholder with the node IDs/fields from the API export. If subgraphs are flattened differently, use the exported structure. Once the first clip exists and passes visual review, render more shots. Use \`--only-shot SHOT_ID\` to retry an individual scene.
+Replace **every** placeholder with the node IDs/fields from the API export. If subgraphs are flattened differently, use the exported structure. Once the first clip exists and passes visual review, render more shots. Use `--only-shot SHOT_ID` to retry an individual scene.
 
-If the project code and ComfyUI run on separate VMs, \`127.0.0.1:8188\` will not address the remote ComfyUI server; set \`--comfy-url\` to a protected reachable endpoint. Keep the API private.
+If the project code and ComfyUI run on separate VMs, `127.0.0.1:8188` will not address the remote ComfyUI server; set `--comfy-url` to a protected reachable endpoint. Keep the API private.
 
 ## Alternatives if no larger GPU is available
 
