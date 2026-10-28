@@ -99,3 +99,23 @@ def test_comfyui_api_health_submit_history_and_download(tmp_path):
         server.shutdown()
         thread.join(timeout=2)
         server.server_close()
+
+
+
+def test_storyboard_triptych_renders_and_decodes(tmp_path):
+    from PIL import ImageDraw
+    from engine import render_storyboard_triptych
+
+    storyboard = Image.new("RGB", (300, 120), "white")
+    draw = ImageDraw.Draw(storyboard)
+    draw.rectangle((0, 0, 98, 119), fill=(200, 60, 60))
+    draw.rectangle((101, 0, 198, 119), fill=(60, 180, 80))
+    draw.rectangle((201, 0, 299, 119), fill=(60, 90, 200))
+    source = tmp_path / "storyboard.png"
+    storyboard.save(source)
+    target = tmp_path / "storyboard.mp4"
+    render_storyboard_triptych(
+        source, target, panel_bounds=[(0, .33), (.337, .66), (.67, 1)],
+        width=480, height=270, fps=12, seconds_per_panel=1,
+    )
+    assert target.exists() and target.stat().st_size > 1_000
