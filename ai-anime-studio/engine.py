@@ -155,7 +155,8 @@ class ComfyUIClient:
             raise RuntimeError(f"ComfyUI tidak mengembalikan nama file upload: {result}")
         return str(name)
 
-    def patch_video_workflow(self, workflow: dict[str, Any], *, positive_node_id: str,
+    @staticmethod
+    def patch_video_workflow(workflow: dict[str, Any], *, positive_node_id: str,
                              seed_node_id: str, image_node_id: str, positive_prompt: str,
                              seed: int, uploaded_image_name: str) -> dict[str, Any]:
         """Patch a user-exported image-to-video workflow's prompt, seed and image input."""
