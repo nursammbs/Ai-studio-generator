@@ -221,14 +221,17 @@ with st.form("youtube_upload_form"):
     yt_privacy = st.selectbox("Visibilitas", options=["private", "unlisted", "public"], index=0)
     yt_kids = st.selectbox("Audiens anak", options=["Belum ditentukan", "Made for kids", "Not made for kids"], index=0)
     oauth_json = st.file_uploader("Upload OAuth client_secrets.json dari Google Cloud Console", type=["json"], key="youtube_oauth")
-    public_confirmation = ""
-    if yt_privacy == "public":
-        public_confirmation = st.text_input("Ketik PUBLISH-PUBLIC untuk mengonfirmasi publikasi", value="")
+    public_confirmation = st.text_input(
+        "Konfirmasi publik (hanya dipakai jika visibilitas = public)",
+        value="",
+        help="Isi persis PUBLISH-PUBLIC untuk mengizinkan unggahan publik.",
+    )
     upload_clicked = st.form_submit_button("Upload video ke YouTube")
 
 if upload_clicked:
-    target_video = Path(st.session_state.get("last_video", ""))
-    if not target_video.exists():
+    last_video_value = st.session_state.get("last_video")
+    target_video = Path(last_video_value) if last_video_value else None
+    if target_video is None or not target_video.is_file():
         st.error("Buat atau pilih video final dahulu.")
     elif oauth_json is None:
         st.error("Unggah file OAuth client_secrets.json milikmu dahulu. Jangan pernah bagikan file ini ke orang lain.")
