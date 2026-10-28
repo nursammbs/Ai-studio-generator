@@ -159,7 +159,7 @@ class ReviewBundleTests(unittest.TestCase):
             self.assertTrue(page.is_file())
             self.assertTrue(sheet.is_file())
             self.assertIn("Cat turns to camera", page.read_text(encoding="utf-8"))
-            self.assertEqual(len(list((root / "review" / "frames").glob("*.jpg"))), 3)
+            self.assertEqual(len(list((root / "review" / "frames").glob("*.png"))), 3)
             self.assertTrue((root / "review" / "qc_summary.json").is_file())
 
 
