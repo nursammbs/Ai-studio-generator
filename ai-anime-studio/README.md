@@ -61,3 +61,15 @@ python -m pytest -q
 
 ## Licensing
 Code in this folder is MIT-licensed. ComfyUI, FFmpeg, checkpoints, custom nodes and generated assets have their own license/usage terms. Verify every component before commercial use.
+
+
+## AI-generated sprite animation pilot (new)
+
+The separate `sprite_animator.py` renderer animates the included transparent AI-generated cat/mouse pose sheet when you download the accompanying **AI Anime Studio pilot package** linked from the chat delivery. It builds a garden background, switches among generated poses, adds movement, captions, and a synthesized original music cue, then renders H.264 MP4. It is reproducible without a GPU after the image sheet is available locally.
+
+Run:
+```bash
+python sprite_animator.py --sheet assets/character_sheet.png --output output.mp4 --seconds 15 --fps 24
+```
+
+**Capability boundary:** this is AI-art-assisted 2D sprite/cutout animation, not a diffusion text-to-video result or frame-by-frame anime animation. The actual video in the pilot package was rendered and decode-tested. The separate ComfyUI connection remains the path toward testing a real Wan image-to-video workflow; that still requires a running ComfyUI instance and compatible model weights.
