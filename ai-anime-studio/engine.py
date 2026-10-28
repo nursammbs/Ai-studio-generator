@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import subprocess
 import time
 import urllib.error
 import urllib.parse
@@ -228,6 +229,40 @@ class ComfyUIClient:
         prompt_id = self.submit(patched)
         metadata = self.wait_for_video(prompt_id, timeout=timeout)
         return self.download_media(metadata, output_path)
+
+
+def concatenate_videos(video_paths: Iterable[str | Path], output_path: str | Path, *,
+                       fps: int = 24, width: int = 960, height: int = 540) -> Path:
+    """Decode generated scene clips and concatenate them into a normalized MP4."""
+    paths = [Path(p) for p in video_paths]
+    if not paths:
+        raise ValueError("Minimal satu klip video diperlukan.")
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    writer = imageio.get_writer(str(output_path), fps=fps, codec="libx264", quality=8, macro_block_size=1)
+    frames_written = 0
+    try:
+        for path in paths:
+            reader = imageio.get_reader(str(path))
+            try:
+                for frame in reader:
+                    image = Image.fromarray(frame).convert("RGB")
+                    fitted = _fit_canvas(image, width, height)
+                    writer.append_data(np.asarray(fitted))
+                    frames_written += 1
+            finally:
+                reader.close()
+    finally:
+        writer.close()
+    if frames_written == 0 or output_path.stat().st_size < 1024:
+        raise RuntimeError("Klip video tidak berisi frame valid.")
+    reader = imageio.get_reader(str(output_path))
+    try:
+        reader.get_data(0)
+        reader.get_data(frames_written - 1)
+    finally:
+        reader.close()
+    return output_path
 
 
 def _font(size: int, bold: bool = False) -> ImageFont.ImageFont:
