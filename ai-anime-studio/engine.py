@@ -127,6 +127,108 @@ class ComfyUIClient:
         directory.mkdir(parents=True, exist_ok=True)
         return self.download_image(images[0], directory / f"scene_seed_{seed}.png")
 
+    def upload_image(self, image_path: str | Path) -> str:
+        """Upload an image to ComfyUI and return its server-side filename."""
+        image_path = Path(image_path)
+        boundary = "----AIAnimeStudioBoundary7MA4YWxkTrZu0gW"
+        payload = image_path.read_bytes()
+        content_type = "image/png" if image_path.suffix.lower() == ".png" else "image/jpeg"
+        body = (
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="image"; filename="{image_path.name}"\r\n'
+            f"Content-Type: {content_type}\r\n\r\n"
+        ).encode() + payload + f"\r\n--{boundary}--\r\n".encode()
+        req = urllib.request.Request(
+            self.base_url.rstrip("/") + "/upload/image",
+            data=body,
+            headers={"Content-Type": f"multipart/form-data; boundary={boundary}", "Accept": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout) as response:
+                result = json.loads(response.read().decode("utf-8"))
+        except Exception as exc:
+            raise RuntimeError(f"Gagal mengunggah gambar referensi ke ComfyUI: {exc}") from exc
+        name = result.get("name") if isinstance(result, dict) else None
+        if not name:
+            raise RuntimeError(f"ComfyUI tidak mengembalikan nama file upload: {result}")
+        return str(name)
+
+    def patch_video_workflow(self, workflow: dict[str, Any], *, positive_node_id: str,
+                             seed_node_id: str, image_node_id: str, positive_prompt: str,
+                             seed: int, uploaded_image_name: str) -> dict[str, Any]:
+        """Patch a user-exported image-to-video workflow's prompt, seed and image input."""
+        patched = json.loads(json.dumps(workflow))
+        values = [
+            (str(positive_node_id), "text", positive_prompt),
+            (str(seed_node_id), "seed", int(seed)),
+            (str(image_node_id), "image", uploaded_image_name),
+        ]
+        for node_id, field, value in values:
+            if node_id not in patched:
+                raise ValueError(f"Node ID '{node_id}' tidak ditemukan pada workflow video.")
+            inputs = patched[node_id].get("inputs", {})
+            if field not in inputs:
+                raise ValueError(f"Node '{node_id}' tidak memiliki input '{field}'.")
+            inputs[field] = value
+        return patched
+
+    def wait_for_video(self, prompt_id: str, timeout: float = 900,
+                       poll_seconds: float = 2) -> dict[str, str]:
+        """Wait for a ComfyUI video/GIF output and return its file metadata."""
+        deadline, last_seen = time.monotonic() + timeout, None
+        media_keys = ("videos", "gifs")
+        while time.monotonic() < deadline:
+            history = self._request("/history/" + urllib.parse.quote(prompt_id, safe=""))
+            record = history.get(prompt_id, {}) if isinstance(history, dict) else {}
+            outputs = record.get("outputs", {}) if isinstance(record, dict) else {}
+            for node in outputs.values():
+                if not isinstance(node, dict):
+                    continue
+                for key in media_keys:
+                    for item in node.get(key, []):
+                        if item.get("filename"):
+                            return {
+                                "filename": str(item["filename"]),
+                                "subfolder": str(item.get("subfolder", "")),
+                                "type": str(item.get("type", "output")),
+                                "media_key": key,
+                            }
+            last_seen = record or history
+            time.sleep(max(0.2, poll_seconds))
+        raise TimeoutError(f"ComfyUI belum menghasilkan video setelah {timeout}s. Status terakhir: {last_seen}")
+
+    def download_media(self, metadata: dict[str, str], target: str | Path) -> Path:
+        """Download a ComfyUI video/GIF output without assuming its codec."""
+        query = urllib.parse.urlencode({
+            "filename": metadata["filename"],
+            "subfolder": metadata.get("subfolder", ""),
+            "type": metadata.get("type", "output"),
+        })
+        raw = self._request("/view?" + query)
+        if not isinstance(raw, bytes):
+            raise RuntimeError("Endpoint ComfyUI /view tidak mengembalikan file media.")
+        target = Path(target)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(raw)
+        if target.stat().st_size < 1024:
+            raise RuntimeError("File media hasil ComfyUI terlalu kecil; kemungkinan output tidak valid.")
+        return target
+
+    def generate_video_from_image(self, workflow: dict[str, Any], *, positive_node_id: str,
+                                  seed_node_id: str, image_node_id: str, positive_prompt: str,
+                                  seed: int, source_image: str | Path, output_path: str | Path,
+                                  timeout: float = 900) -> Path:
+        uploaded_name = self.upload_image(source_image)
+        patched = self.patch_video_workflow(
+            workflow, positive_node_id=positive_node_id, seed_node_id=seed_node_id,
+            image_node_id=image_node_id, positive_prompt=positive_prompt,
+            seed=seed, uploaded_image_name=uploaded_name,
+        )
+        prompt_id = self.submit(patched)
+        metadata = self.wait_for_video(prompt_id, timeout=timeout)
+        return self.download_media(metadata, output_path)
+
 
 def _font(size: int, bold: bool = False) -> ImageFont.ImageFont:
     candidates = [
