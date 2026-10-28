@@ -156,3 +156,8 @@ For motion transfer, see the official [Wan Animate 2 workflow template](https://
 
 
 For Wan Animate 2 specifically, you can configure two separate prompt inputs: the appearance/background text and the movement/pose text, using `--pose-prompt-node` and `--pose-prompt-field`. The upstream template currently generates 81 frames per motion-transfer subgraph (~3.4 seconds at 24 fps), so longer shots require a chained/extended ComfyUI workflow. See the full node configuration and model setup in [STUDIO_PIPELINE.md](STUDIO_PIPELINE.md).
+
+
+## Wan Animate 2 starter assets
+
+The example manifest now points to four reference compositions and driving-video guides supplied in the downloadable [Wan Animate 2 Motion-Transfer Starter Kit](https://github.com/nursammbs/Ai-studio-generator). Copy the kit's reference PNGs and motion MP4s into the corresponding `assets/refs/` and `assets/motion/` directories. These files are 2D sprite-based blocking guides, not outputs from the video model. Follow [STUDIO_PIPELINE.md](STUDIO_PIPELINE.md) to export a ComfyUI API workflow, inspect node IDs/fields, and run a single shot first. The current UI template usually uses `file` on the top-level LoadVideo node; verify your exported API JSON before running.
