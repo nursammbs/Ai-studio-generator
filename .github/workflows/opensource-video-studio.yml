@@ -33,3 +33,11 @@ jobs:
         run: python -m py_compile app.py engine.py
       - name: Run unit tests
         run: PYTHONPATH=. pytest -q
+      - name: Upload rendered smoke-test video
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: opensource-video-studio-smoke-output
+          path: opensource-video-studio/test-artifacts/
+          if-no-files-found: ignore
+          retention-days: 7
