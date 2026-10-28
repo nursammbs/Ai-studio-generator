@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Shot-based cartoon production: ComfyUI image-to-video -> FFmpeg -> final episode."""
 from __future__ import annotations
-import argparse, json, subprocess, sys, time
+import argparse, json, shutil, subprocess, sys, time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -19,6 +19,7 @@ class Shot:
     seed: int
     speed: float = 1.0
     source_video: Path | None = None
+    motion_video: Path | None = None
 
 def run(cmd: list[str]) -> subprocess.CompletedProcess[str]:
     try:
@@ -50,6 +51,8 @@ def load_project(path: Path) -> tuple[dict[str, Any], list[Shot]]:
         if not ref.is_absolute(): ref = root / ref
         src = Path(str(raw["source_video"])) if raw.get("source_video") else None
         if src and not src.is_absolute(): src = root / src
+        motion = Path(str(raw["motion_video"])) if raw.get("motion_video") else None
+        if motion and not motion.is_absolute(): motion = root / motion
         prompt = str(raw.get("prompt", "")).strip()
         if not prompt: raise ValueError(f"Empty prompt for {sid}")
         seed, speed = int(raw.get("seed", 1000+i)), float(raw.get("speed", 1.0))
@@ -58,12 +61,14 @@ def load_project(path: Path) -> tuple[dict[str, Any], list[Shot]]:
             if not src.is_file(): raise FileNotFoundError(f"Source video missing: {src}")
         elif not ref.is_file():
             raise FileNotFoundError(f"Reference image for {sid} missing: {ref}")
-        shots.append(Shot(sid, ref, prompt, seed, speed, src))
+        if motion and not motion.is_file(): raise FileNotFoundError(f"Motion video missing: {motion}")
+        shots.append(Shot(sid, ref, prompt, seed, speed, src, motion))
     return data, shots
 
 def generate(project: dict[str, Any], shots: list[Shot], workflow_path: Path, base_url: str,
              positive_id: str, seed_id: str, image_id: str, negative_id: str | None,
-             output_dir: Path, timeout: int) -> list[Path]:
+             output_dir: Path, timeout: int, motion_id: str | None = None,
+             motion_field: str = "video", comfy_input_dir: Path | None = None) -> list[Path]:
     if ComfyUIClient is None: raise RuntimeError("Run this script beside the project's engine.py.")
     workflow = json.loads(workflow_path.read_text(encoding="utf-8"))
     style = str(project.get("style_bible", "premium 2D cel animation, consistent ink, expressive readable silhouettes"))
@@ -74,6 +79,15 @@ def generate(project: dict[str, Any], shots: list[Shot], workflow_path: Path, ba
         if not isinstance(node, dict) or "text" not in node.get("inputs", {}):
             raise ValueError(f"Negative prompt node {negative_id} does not expose text input")
         node["inputs"]["text"] = negative
+    uses_motion = any(shot.motion_video for shot in shots)
+    if uses_motion and not (motion_id and comfy_input_dir):
+        raise ValueError("motion_video requires --motion-video-node and --comfy-input-dir (the ComfyUI server input directory)")
+    if uses_motion:
+        motion_node = workflow.get(str(motion_id))
+        if not isinstance(motion_node, dict) or motion_field not in motion_node.get("inputs", {}):
+            raise ValueError(f"Motion node {motion_id} does not expose input {motion_field}")
+        assert comfy_input_dir is not None
+        comfy_input_dir.mkdir(parents=True, exist_ok=True)
     client = ComfyUIClient(base_url=base_url, timeout=60)
     client.health()
     raw_dir = output_dir / "raw"
@@ -85,12 +99,20 @@ def generate(project: dict[str, Any], shots: list[Shot], workflow_path: Path, ba
             print(f"[resume] {shot.id}: keeping existing render")
             results.append(target); continue
         prompt = f"{style}. Character continuity: {characters}. Shot action: {shot.prompt}. Keep identity stable, coherent staging, clear silhouettes, natural anticipation and follow-through; no camera teleporting."
+        if shot.motion_video:
+            assert comfy_input_dir is not None and motion_id is not None
+            motion_target = comfy_input_dir / f"{shot.id}{shot.motion_video.suffix.lower()}"
+            if shot.motion_video.resolve() != motion_target.resolve():
+                shutil.copy2(shot.motion_video, motion_target)
+            # The workflow's LoadVideo/VHS node input must be a filename relative to ComfyUI/input.
+            workflow[str(motion_id)]["inputs"][motion_field] = motion_target.name
         print(f"[{i}/{len(shots)}] Generating {shot.id}, seed={shot.seed}")
         result = client.generate_video_from_image(workflow, positive_node_id=positive_id, seed_node_id=seed_id,
             image_node_id=image_id, positive_prompt=prompt, seed=shot.seed,
             source_image=shot.reference_image, output_path=target, timeout=timeout)
         target.with_suffix(".json").write_text(json.dumps({"id":shot.id,"prompt":prompt,"negative_prompt":negative,
             "seed":shot.seed,"reference_image":str(shot.reference_image),"workflow":str(workflow_path),
+            "motion_video":str(shot.motion_video) if shot.motion_video else None,
             "generated_at_unix":int(time.time())}, indent=2, ensure_ascii=False), encoding="utf-8")
         results.append(result)
     return results
@@ -150,6 +172,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--workflow",type=Path)
     p.add_argument("--comfy-url",default="http://127.0.0.1:8188")
     p.add_argument("--positive-node"); p.add_argument("--seed-node"); p.add_argument("--image-node"); p.add_argument("--negative-node")
+    p.add_argument("--motion-video-node", help="Optional video-loader node ID for a driving motion video")
+    p.add_argument("--motion-video-field", default="video", help="Input name on the video-loader node; inspect your API workflow")
+    p.add_argument("--comfy-input-dir", type=Path, help="ComfyUI/input directory on the machine running ComfyUI")
     p.add_argument("--music",type=Path)
     p.add_argument("--width",type=int,default=1280); p.add_argument("--height",type=int,default=720)
     p.add_argument("--fps",type=int,default=24); p.add_argument("--transition",type=float,default=0.25)
@@ -162,7 +187,8 @@ def main(argv: list[str] | None = None) -> int:
         raws = [s.source_video for s in shots]
     else:
         if not all((a.workflow,a.positive_node,a.seed_node,a.image_node)): p.error("Generation needs --workflow, --positive-node, --seed-node, --image-node")
-        raws = generate(project,shots,a.workflow,a.comfy_url,a.positive_node,a.seed_node,a.image_node,a.negative_node,a.work_dir,a.timeout)
+        raws = generate(project,shots,a.workflow,a.comfy_url,a.positive_node,a.seed_node,a.image_node,a.negative_node,
+            a.work_dir,a.timeout,a.motion_video_node,a.motion_video_field,a.comfy_input_dir)
     normalized = []
     for i,(shot,raw) in enumerate(zip(shots,raws),1):
         dst=a.work_dir/"normalized"/f"{i:02d}_{shot.id}.mp4"
