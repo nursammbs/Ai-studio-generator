@@ -137,7 +137,7 @@ def _commons_image(query: str):
         license_name = _clean_html(meta.get("LicenseShortName", {}).get("value", ""))
         normalized = license_name.lower()
         allowed = any(k in normalized for k in ("cc by", "cc0", "public domain", "pd"))
-        excluded = any(k in normalized for k in ("noncommercial", "non-commercial", " cc nc", "cc by-nd", "cc by nd"))
+        excluded = any(k in normalized for k in ("noncommercial", "non-commercial", "cc by-nc", "cc-by-nc", "cc by-nd", "cc-by-nd", "cc by nd"))
         if not allowed or excluded:
             continue
         title = str(page.get("title", "Wikimedia image"))
