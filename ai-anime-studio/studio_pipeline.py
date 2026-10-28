@@ -59,7 +59,7 @@ def shot_fingerprint(shot: Shot, workflow_path: Path, *, style: str, characters:
 
 
 def patch_shot_workflow(workflow: dict[str, Any], *, positive_node_id: str,
-                        positive_field: str, seed_node_id: str, seed_field: str,
+                        positive_field: str, seed_node_id: str | None, seed_field: str,
                         image_node_id: str, image_field: str, positive_prompt: str, seed: int,
                         uploaded_image_name: str, negative_node_id: str | None = None,
                         negative_field: str = "text", negative_prompt: str = "",
@@ -77,7 +77,8 @@ def patch_shot_workflow(workflow: dict[str, Any], *, positive_node_id: str,
             raise ValueError(f"Workflow node '{node_id}' has no input '{field}'")
         node["inputs"][field] = value
     set_input(positive_node_id, positive_field, positive_prompt)
-    set_input(seed_node_id, seed_field, int(seed))
+    if seed_node_id:
+        set_input(seed_node_id, seed_field, int(seed))
     set_input(image_node_id, image_field, uploaded_image_name)
     if negative_node_id:
         set_input(negative_node_id, negative_field, negative_prompt)
@@ -123,7 +124,7 @@ def load_project(path: Path) -> tuple[dict[str, Any], list[Shot]]:
     return data, shots
 
 def generate(project: dict[str, Any], shots: list[Shot], workflow_path: Path, base_url: str,
-             positive_id: str, seed_id: str, image_id: str, negative_id: str | None,
+             positive_id: str, seed_id: str | None, image_id: str, negative_id: str | None,
              output_dir: Path, timeout: int, motion_id: str | None = None,
              motion_field: str = "video", comfy_input_dir: Path | None = None,
              positive_field: str = "text", seed_field: str = "seed",
@@ -147,13 +148,15 @@ def generate(project: dict[str, Any], shots: list[Shot], workflow_path: Path, ba
         if not isinstance(motion_node, dict) or motion_field not in motion_node.get("inputs", {}):
             raise ValueError(f"Motion node {motion_id} does not expose input {motion_field}")
         comfy_input_dir.mkdir(parents=True, exist_ok=True)
+    if not seed_id:
+        print("[config] No seed node configured; the workflow's exported seed value will be used for every shot.")
     client = ComfyUIClient(base_url=base_url, timeout=60)
     client.health()
     raw_dir = output_dir / "raw"
     raw_dir.mkdir(parents=True, exist_ok=True)
     results: list[Path] = []
     node_config = {"positive_node":str(positive_id),"positive_field":positive_field,
-        "seed_node":str(seed_id),"seed_field":seed_field,"image_node":str(image_id),
+        "seed_node":str(seed_id or ""),"seed_field":seed_field,"image_node":str(image_id),
         "image_field":image_field,"negative_node":str(negative_id or ""),
         "negative_field":negative_field,"motion_node":str(motion_id or ""),
         "motion_field":motion_field,"pose_prompt_node":str(pose_prompt_id or ""),
@@ -358,7 +361,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--image-node"); p.add_argument("--image-field", default="image")
     p.add_argument("--negative-node"); p.add_argument("--negative-field", default="text")
     p.add_argument("--motion-video-node", help="Optional video-loader node ID for a driving motion video")
-    p.add_argument("--motion-video-field", default="video", help="Input name on the video-loader node; inspect your API workflow")
+    p.add_argument("--motion-video-field", default="file", help="Input name on the video-loader node; inspect your API workflow")
     p.add_argument("--pose-prompt-node", help="Optional node ID for a separate driving-motion prompt (Wan Animate 2)")
     p.add_argument("--pose-prompt-field", default="text_4", help="Pose prompt input field on that node; inspect API workflow")
     p.add_argument("--force", action="store_true", help="Regenerate all shots even if cache fingerprint matches")
@@ -368,14 +371,25 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--width",type=int,default=1280); p.add_argument("--height",type=int,default=720)
     p.add_argument("--fps",type=int,default=24); p.add_argument("--transition",type=float,default=0.25)
     p.add_argument("--timeout",type=int,default=1200); p.add_argument("--assemble-only",action="store_true")
+    selection = p.add_mutually_exclusive_group()
+    selection.add_argument("--only-shot", help="Generate/assemble one exact shot ID from the project manifest")
+    selection.add_argument("--limit-shots", type=int, help="Generate/assemble only the first N shots; use 1 for a smoke test")
     a = p.parse_args(argv)
     if a.width < 320 or a.height < 180 or not 12 <= a.fps <= 60: p.error("Use at least 320x180 and 12–60 FPS")
-    project, shots = load_project(a.project); a.work_dir.mkdir(parents=True,exist_ok=True)
+    project, shots = load_project(a.project)
+    if a.only_shot:
+        selected = [shot for shot in shots if shot.id == a.only_shot]
+        if not selected: p.error(f"Shot ID not found: {a.only_shot}")
+        shots = selected
+    if a.limit_shots is not None:
+        if a.limit_shots < 1: p.error("--limit-shots must be at least 1")
+        shots = shots[:a.limit_shots]
+    a.work_dir.mkdir(parents=True,exist_ok=True)
     if a.assemble_only:
         if any(not s.source_video for s in shots): p.error("--assemble-only requires source_video for every shot")
         raws = [s.source_video for s in shots]
     else:
-        if not all((a.workflow,a.positive_node,a.seed_node,a.image_node)): p.error("Generation needs --workflow, --positive-node, --seed-node, --image-node")
+        if not all((a.workflow,a.positive_node,a.image_node)): p.error("Generation needs --workflow, --positive-node, and --image-node; --seed-node is optional if the workflow's seed should be preserved")
         raws = generate(project,shots,a.workflow,a.comfy_url,a.positive_node,a.seed_node,a.image_node,a.negative_node,
             a.work_dir,a.timeout,a.motion_video_node,a.motion_video_field,a.comfy_input_dir,
             a.positive_field,a.seed_field,a.image_field,a.negative_field,a.force,
