@@ -1,0 +1,31 @@
+name: Open Source Video Studio checks
+
+on:
+  push:
+    paths:
+      - "opensource-video-studio/**"
+      - ".github/workflows/opensource-video-studio.yml"
+  pull_request:
+    paths:
+      - "opensource-video-studio/**"
+      - ".github/workflows/opensource-video-studio.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: opensource-video-studio
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest
+      - name: Check syntax
+        run: python -m py_compile app.py engine.py
+      - name: Run unit tests
+        run: pytest -q
