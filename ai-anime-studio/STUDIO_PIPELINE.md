@@ -49,3 +49,36 @@ Klip pendek per shot memberi kontrol lebih baik daripada satu video panjang: pro
 ## Validasi dan batasan
 
 Pipeline menguji apakah output bisa didekode FFmpeg dan memeriksa durasi/ukuran file. Unit test mencakup validasi manifest. Itu bukan pengganti review visual atas flicker, konsistensi karakter dan kontinuitas. Inferensi model sungguhan harus diuji pada komputer yang menjalankan ComfyUI, checkpoint dan workflow yang kompatibel; model belum dijalankan di lingkungan build ini.
+
+## Motion-reference mode (lebih terarah)
+
+Untuk ekspresi dan gerakan yang lebih terkendali, pertimbangkan **Wan2.2-Animate** sebagai workflow, bukan text-only image-to-video. Framework tersebut menggunakan video pemandu gerakan/ekspresi dan gambar karakter sebagai referensi; periksa panduan resmi untuk mode animate/replace dan format yang tepat: https://docs.comfy.org/tutorials/video/wan/wan2-2-animate dan https://github.com/Wan-Video/Wan2.2.
+
+Pada shot yang memiliki driving-video, tambahkan field `motion_video` ke manifest:
+
+```json
+{
+  "id": "02_chase",
+  "reference_image": "assets/cat_mouse_keyframe.png",
+  "motion_video": "assets/motion/chase_blocking.mp4",
+  "prompt": "The gray cat chases the mouse from left to right, preserve the approved cartoon design.",
+  "seed": 41002,
+  "speed": 1.0
+}
+```
+
+Pastikan video pemandu legal untuk digunakan dan hanya berisi gerakan yang ingin ditiru. Ekspor workflow Wan-Animate sebagai API JSON, lalu jalankan:
+
+```bash
+python studio_pipeline.py \
+  --project examples/shotlist.example.json \
+  --workflow workflows/wan_animate_api.json \
+  --positive-node 6 --seed-node 3 --image-node 56 \
+  --motion-video-node 58 --motion-video-field video \
+  --comfy-input-dir /path/to/ComfyUI/input \
+  --output outputs/episode_animate.mp4
+```
+
+Semua node ID dan nama field pada contoh hanyalah ilustrasi. `--comfy-input-dir` harus menunjuk ke folder input **di mesin yang menjalankan ComfyUI**; skrip menyalin motion clip ke sana dan memasukkan nama file ke node video yang dipilih. Workflow harus benar-benar memakai node video itu untuk mengendalikan animasi. Tidak semua workflow Wan-Animate mempunyai struktur node/input yang sama.
+
+Motion reference meningkatkan arahan gerak, tetapi tidak menjamin hasil sempurna: gerakan sumber yang rumit, occlusion, kamera, proporsi hewan kartun, dan perbedaan bentuk manusia/hewan dapat menghasilkan deformasi. Tinjau setiap take dan bersihkan shot penting di OpenToonz/compositing.
