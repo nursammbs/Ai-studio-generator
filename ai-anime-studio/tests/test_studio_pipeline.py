@@ -124,6 +124,15 @@ class WorkflowPatchingTests(unittest.TestCase):
             )
 
 
+    def test_optional_seed_keeps_exported_workflow_value(self):
+        patched = studio_pipeline.patch_shot_workflow(
+            self.template, positive_node_id="10", positive_field="prompt_text",
+            seed_node_id=None, seed_field="seed_value", image_node_id="20", image_field="ref_file",
+            positive_prompt="test appearance", seed=99, uploaded_image_name="reference.png",
+        )
+        self.assertEqual(patched["10"]["inputs"]["seed_value"], 1)
+        self.assertEqual(self.template["10"]["inputs"]["seed_value"], 1)
+
 class FingerprintTests(unittest.TestCase):
     def test_fingerprint_changes_with_prompt_or_workflow(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -200,6 +209,30 @@ class MotionGuideGeneratorTests(unittest.TestCase):
         mouse = Image.new("RGBA", (20, 20), (0, 255, 0, 255))
         with self.assertRaisesRegex(ValueError, "Unknown scene"):
             generate_motion_guides.scene_frame("unused", 0.0, [cat] * 4, [mouse] * 4)
+
+
+class ShotSelectionTests(unittest.TestCase):
+    def setUp(self):
+        self.shots = [
+            studio_pipeline.Shot("one", Path("one.png"), "first", 1),
+            studio_pipeline.Shot("two", Path("two.png"), "second", 2),
+            studio_pipeline.Shot("three", Path("three.png"), "third", 3),
+        ]
+
+    def test_limit_shots_selects_first_n_in_order(self):
+        self.assertEqual([s.id for s in studio_pipeline.select_shots(self.shots, limit_shots=1)], ["one"])
+        self.assertEqual([s.id for s in studio_pipeline.select_shots(self.shots, limit_shots=2)], ["one", "two"])
+
+    def test_only_shot_selects_exact_id(self):
+        self.assertEqual([s.id for s in studio_pipeline.select_shots(self.shots, only_shot="two")], ["two"])
+
+    def test_invalid_or_empty_selection_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "not found"):
+            studio_pipeline.select_shots(self.shots, only_shot="missing")
+        with self.assertRaisesRegex(ValueError, "at least 1"):
+            studio_pipeline.select_shots(self.shots, limit_shots=0)
+        with self.assertRaisesRegex(ValueError, "either"):
+            studio_pipeline.select_shots(self.shots, only_shot="one", limit_shots=1)
 
 
 class ReviewBundleTests(unittest.TestCase):
