@@ -5,7 +5,7 @@ from threading import Thread
 import pytest
 from PIL import Image
 
-from engine import ComfyUIClient, render_image_animatic, render_offline_animatic
+from engine import ComfyUIClient, concatenate_videos, render_image_animatic, render_offline_animatic
 
 
 def tiny_workflow():
@@ -119,3 +119,32 @@ def test_storyboard_triptych_renders_and_decodes(tmp_path):
         width=480, height=270, fps=12, seconds_per_panel=1,
     )
     assert target.exists() and target.stat().st_size > 1_000
+
+def test_patch_video_workflow_updates_prompt_seed_and_uploaded_image():
+    workflow = {
+        "1": {"inputs": {"text": "old prompt"}},
+        "3": {"inputs": {"seed": 1}},
+        "10": {"inputs": {"image": "old.png"}},
+    }
+    patched = ComfyUIClient.patch_video_workflow(
+        workflow,
+        positive_node_id="1",
+        seed_node_id="3",
+        image_node_id="10",
+        positive_prompt="a cat runs",
+        seed=42,
+        uploaded_image_name="input.png",
+    )
+    assert patched["1"]["inputs"]["text"] == "a cat runs"
+    assert patched["3"]["inputs"]["seed"] == 42
+    assert patched["10"]["inputs"]["image"] == "input.png"
+    assert workflow["10"]["inputs"]["image"] == "old.png"
+
+
+def test_concatenate_videos_normalizes_and_decodes(tmp_path):
+    from engine import render_offline_animatic
+    first = render_offline_animatic(tmp_path / "one.mp4", width=320, height=180, fps=6, seconds_per_scene=1)
+    second = render_offline_animatic(tmp_path / "two.mp4", width=320, height=180, fps=6, seconds_per_scene=1)
+    output = concatenate_videos([first, second], tmp_path / "joined.mp4", fps=6, width=320, height=180)
+    assert output.exists() and output.stat().st_size > 1000
+
