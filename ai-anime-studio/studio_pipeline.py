@@ -299,9 +299,9 @@ def create_review_bundle(shots: list[Shot], clips: list[Path], review_dir: Path,
         cards: list[str] = []
         for col, (label, fraction) in enumerate(labels):
             timestamp = min(max(0.0, clip_duration * fraction), max(0.0, clip_duration - 0.08))
-            frame_path = frames_dir / f"{index + 1:02d}_{shot.id}_{label}.jpg"
+            frame_path = frames_dir / f"{index + 1:02d}_{shot.id}_{label}.png"
             run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-ss", f"{timestamp:.3f}",
-                 "-i", str(clip), "-frames:v", "1", "-q:v", "3", str(frame_path)])
+                 "-i", str(clip), "-frames:v", "1", "-pix_fmt", "rgb24", "-c:v", "png", str(frame_path)])
             if not frame_path.is_file() or frame_path.stat().st_size < 256:
                 raise RuntimeError(f"Unable to extract QC frame {label} from {clip}")
             with Image.open(frame_path) as opened:
