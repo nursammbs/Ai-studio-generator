@@ -124,3 +124,16 @@ The second command uploads as **private** by default. After checking the video i
 Official references:
 - https://developers.google.com/youtube/v3/guides/uploading_a_video
 - https://developers.google.com/youtube/v3/docs/videos/insert
+
+
+## V2 animation renderer and faster publishing
+
+A new `sprite_animator_v2.py` renderer cycles four AI-generated running poses per character and adds timed action beats, squash/pose timing, skid/speed lines, moving background layers, impact beats and a synthesized score. Download the **AI Anime Studio V2 production kit** linked from the project conversation for the two transparent sprite sheets and the rendered example output. Then run:
+
+```bash
+python sprite_animator_v2.py --cat-sheet assets/cat_running_sheet_clean.png --mouse-sheet assets/mouse_running_sheet_clean.png --output outputs/cartoon_v2.mp4 --seconds 20 --fps 24
+```
+
+The source renderer does not need a GPU once the pose sheets exist. It is still sprite/cutout animation rather than frame-by-frame neural video; the true generative motion path remains the ComfyUI Wan workflow documented below.
+
+To reduce the last mile between rendering and publishing, `youtube_upload.py` and the Streamlit upload form now support resumable YouTube uploads. OAuth and a channel authorization are required; default visibility is **private**. No upload is done automatically. The public-visibility option requires a typed confirmation. See the YouTube upload section above and `PUBLICATION_CHECKLIST.md` in the V2 kit.
