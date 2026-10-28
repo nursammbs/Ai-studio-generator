@@ -60,6 +60,41 @@ with right:
     st.info("ID 6/7/3 hanya contoh. Sesuaikan dengan node ID di workflow yang di-export.")
 
 st.divider()
+st.subheader("3. Ubah storyboard AI menjadi video")
+st.caption("Unggah gambar storyboard 3 panel yang dibuat dengan model gambar AI. Aplikasi akan memotong panel, memberi gerakan kamera sederhana, dan merender MP4.")
+storyboard_upload = st.file_uploader("Gambar storyboard 3 panel", type=["png", "jpg", "jpeg"], key="storyboard_upload")
+storyboard_left = st.text_input("Batas panel 1 (x kiri,kanan; 0–1)", value="0.000,0.325")
+storyboard_mid = st.text_input("Batas panel 2 (x kiri,kanan; 0–1)", value="0.337,0.661")
+storyboard_right = st.text_input("Batas panel 3 (x kiri,kanan; 0–1)", value="0.673,1.000")
+if st.button("Render storyboard AI → MP4", use_container_width=True):
+    if storyboard_upload is None:
+        st.error("Unggah gambar storyboard terlebih dahulu.")
+    else:
+        try:
+            from engine import render_storyboard_triptych
+            panel_bounds = []
+            for value in (storyboard_left, storyboard_mid, storyboard_right):
+                pair = [float(part.strip()) for part in value.split(",")]
+                if len(pair) != 2 or not (0 <= pair[0] < pair[1] <= 1):
+                    raise ValueError("Setiap batas panel harus dua angka 0–1, misalnya 0.000,0.325.")
+                panel_bounds.append((pair[0], pair[1]))
+            source_path = OUTPUT_DIR / "uploaded_storyboard.png"
+            source_path.write_bytes(storyboard_upload.getvalue())
+            video = render_storyboard_triptych(
+                source_path, OUTPUT_DIR / "storyboard_ai_animatic.mp4",
+                panel_bounds=panel_bounds, fps=fps, seconds_per_panel=seconds,
+            )
+            st.session_state["last_video"] = str(video)
+            st.session_state["last_images"] = []
+            st.session_state["last_note"] = (
+                "Video dibuat dari gambar storyboard yang diunggah. Gerakan adalah pan/zoom pada tiap panel; "
+                "bukan generasi frame animasi penuh. Sesuaikan batas panel jika gambar memiliki gutter berbeda."
+            )
+            st.success("Storyboard AI berhasil dirender menjadi MP4.")
+        except Exception as exc:
+            st.error(f"Render storyboard gagal: {exc}")
+
+st.divider()
 col_demo, col_ai = st.columns(2)
 
 with col_demo:
