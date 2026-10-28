@@ -158,3 +158,23 @@ python generate_motion_guides.py
 ```
 
 The generator writes the four PNG reference frames and four 81-frame MP4 blocking guides to `assets/refs/` and `assets/motion/`. It is deterministic sprite/cutout animation for motion-reference testing; it does not run an AI video model.
+
+
+## Smoke test satu shot sebelum membuat satu episode
+
+Karena model Wan Animate 2 besar dan render per shot memakan komputasi, jangan langsung antrekan semua adegan. Jalankan hanya adegan pertama dengan `--limit-shots 1`:
+
+```bash
+python studio_pipeline.py \
+  --project examples/shotlist.motion_reference.example.json \
+  --workflow workflows/wan_animate2_api.json \
+  --positive-node MOTION_NODE_ID --positive-field text \
+  --pose-prompt-node MOTION_NODE_ID --pose-prompt-field text_4 \
+  --seed-node SAMPLER_NODE_ID --seed-field seed \
+  --image-node LOAD_IMAGE_NODE_ID --image-field image \
+  --motion-video-node LOAD_VIDEO_NODE_ID --motion-video-field file \
+  --comfy-input-dir /path/to/ComfyUI/input \
+  --limit-shots 1 --output outputs/smoke_test.mp4 --force
+```
+
+Ganti semua ID dan field placeholder berdasarkan hasil `workflow_inspect.py`. Jika seed tidak diekspos oleh API graph, hilangkan `--seed-node` dan `--seed-field`; pipeline mempertahankan seed yang sudah tersimpan dalam workflow. Setelah hasil pertama lolos inspeksi, hapus `--limit-shots 1` untuk membuat semua shot, atau gunakan `--only-shot 03_kitchen_chaos` untuk mengulang hanya adegan tertentu.
