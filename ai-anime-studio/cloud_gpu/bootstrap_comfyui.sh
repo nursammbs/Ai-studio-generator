@@ -70,6 +70,21 @@ fi
 python3 -m pip install --upgrade pip
 python3 -m pip install -r "$COMFY_DIR/requirements.txt"
 python3 -m pip install --upgrade huggingface_hub Pillow requests
+if (( START_SERVER == 1 || INSTALL_ANIMATE2 == 1 )); then
+  python3 - <<'PY'
+import sys
+try:
+    import torch
+except Exception as exc:
+    print(f"PyTorch import failed: {exc}", file=sys.stderr)
+    print("Select a GPU runtime with CUDA-enabled PyTorch, then rerun bootstrap.", file=sys.stderr)
+    raise SystemExit(4)
+if not torch.cuda.is_available():
+    print("PyTorch cannot see a CUDA GPU. Select a GPU instance and install a compatible CUDA-enabled PyTorch build.", file=sys.stderr)
+    raise SystemExit(4)
+print(f"PyTorch {torch.__version__}; CUDA {torch.version.cuda}; GPU: {torch.cuda.get_device_name(0)}")
+PY
+fi
 mkdir -p "$COMFY_DIR/user/default/workflows"
 WORKFLOW_URL="https://raw.githubusercontent.com/Comfy-Org/workflow_templates/main/templates/video_wan_animate2.json"
 WORKFLOW_PATH="$COMFY_DIR/user/default/workflows/video_wan_animate2.json"
