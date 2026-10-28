@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 import studio_pipeline
+import workflow_inspect
 
 
 class ProjectParsingTests(unittest.TestCase):
@@ -142,6 +143,30 @@ class FingerprintTests(unittest.TestCase):
 
 
 @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"), "FFmpeg/ffprobe not installed")
+class WorkflowInspectorTests(unittest.TestCase):
+    def test_reports_api_prompt_fields(self):
+        data = {
+            "10": {"class_type": "CLIPTextEncode", "inputs": {"text": "cat in kitchen", "clip": ["1", 0]}},
+            "20": {"class_type": "LoadImage", "inputs": {"image": "cat.png", "upload": "image"}},
+            "30": {"class_type": "SamplerCustom", "inputs": {"noise_seed": 9876}},
+        }
+        fmt, report = workflow_inspect.inspect_workflow(data)
+        self.assertEqual(fmt, "api")
+        self.assertIn("noise_seed", report)
+        self.assertIn("cat in kitchen", report)
+        self.assertIn("Node ID", report)
+
+    def test_warns_when_input_is_ui_graph_not_api_json(self):
+        data = {"nodes": [{
+            "id": 261, "type": "MotionTransfer", "title": "Motion Transfer",
+            "inputs": [{"name": "text"}, {"name": "text_4"}], "widgets_values": []
+        }]}
+        fmt, report = workflow_inspect.inspect_workflow(data)
+        self.assertEqual(fmt, "ui")
+        self.assertIn("not the API prompt format", report)
+        self.assertIn("text_4", report)
+
+
 class ReviewBundleTests(unittest.TestCase):
     def test_creates_contact_sheet_and_offline_html(self):
         with tempfile.TemporaryDirectory() as tmp:
