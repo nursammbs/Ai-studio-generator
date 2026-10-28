@@ -137,3 +137,12 @@ python sprite_animator_v2.py --cat-sheet assets/cat_running_sheet_clean.png --mo
 The source renderer does not need a GPU once the pose sheets exist. It is still sprite/cutout animation rather than frame-by-frame neural video; the true generative motion path remains the ComfyUI Wan workflow documented below.
 
 To reduce the last mile between rendering and publishing, `youtube_upload.py` and the Streamlit upload form now support resumable YouTube uploads. OAuth and a channel authorization are required; default visibility is **private**. No upload is done automatically. The public-visibility option requires a typed confirmation. See the YouTube upload section above and `PUBLICATION_CHECKLIST.md` in the V2 kit.
+
+
+## Open-source shot-based production pipeline
+
+The new `studio_pipeline.py` extends the existing app with shot-by-shot generation and assembly. It keeps per-shot renders for resume, normalizes clips to a common resolution/FPS, supports speed changes, optional fades, and a looped/faded music track. See [STUDIO_PIPELINE.md](STUDIO_PIPELINE.md) and the [shot list example](examples/shotlist.example.json).
+
+Open-source stack: [ComfyUI](https://github.com/Comfy-Org/ComfyUI), [Wan2.2](https://github.com/Wan-Video/Wan2.2), [WanVideoWrapper](https://github.com/kijai/ComfyUI-WanVideoWrapper), [OpenToonz](https://github.com/opentoonz/opentoonz), and [Blender](https://github.com/blender/blender). For even more directed character motion, review the official [Wan2.2 Animate workflow guide](https://docs.comfy.org/tutorials/video/wan/wan2-2-animate); it uses a driving video to guide motion and expression, but has heavier setup and model requirements.
+
+The upgraded pipeline is still an AI-assisted workflow, not an automatic guarantee of studio-quality animation. Review several takes per shot for identity drift, flicker, anatomy and continuity; manually clean hero shots in OpenToonz or a compositing tool. No real Wan inference is claimed until it has run on a machine with the appropriate ComfyUI workflow and model weights.
