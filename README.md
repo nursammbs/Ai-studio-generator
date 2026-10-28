@@ -44,3 +44,7 @@ The live implementation uses Floot's page, database, endpoint and AI runtime con
 ## Trust and claims
 
 The generator drafts promotional content; it cannot guarantee sales, virality, or factual correctness of details absent from the buyer's brief. Verify claims, pricing, promotions, availability and business details before publication.
+
+## Experimental animation module
+
+The repository also contains an early **AI Anime Studio** prototype in [ai-anime-studio](ai-anime-studio/README.md). It combines a local ComfyUI API integration with a three-scene MP4 animatic renderer. Its offline demo and API mock tests validate the rendering and integration scaffolding; true image generation requires a local ComfyUI installation, models, and an exported API workflow. It is not yet a full frame-by-frame anime generator.
