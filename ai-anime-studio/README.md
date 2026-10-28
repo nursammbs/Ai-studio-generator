@@ -146,3 +146,10 @@ The new `studio_pipeline.py` extends the existing app with shot-by-shot generati
 Open-source stack: [ComfyUI](https://github.com/Comfy-Org/ComfyUI), [Wan2.2](https://github.com/Wan-Video/Wan2.2), [WanVideoWrapper](https://github.com/kijai/ComfyUI-WanVideoWrapper), [OpenToonz](https://github.com/opentoonz/opentoonz), and [Blender](https://github.com/blender/blender). For even more directed character motion, review the official [Wan2.2 Animate workflow guide](https://docs.comfy.org/tutorials/video/wan/wan2-2-animate); it uses a driving video to guide motion and expression, but has heavier setup and model requirements.
 
 The upgraded pipeline is still an AI-assisted workflow, not an automatic guarantee of studio-quality animation. Review several takes per shot for identity drift, flicker, anatomy and continuity; manually clean hero shots in OpenToonz or a compositing tool. No real Wan inference is claimed until it has run on a machine with the appropriate ComfyUI workflow and model weights.
+
+
+## Production iteration: workflow compatibility + review artifacts
+
+The shot runner now supports custom ComfyUI field names for prompt, seed, image, negative prompt and motion video. Shot renders are cached by a content fingerprint to prevent stale output from being reused after a workflow, reference, seed or prompt changes. It also builds `outputs/studio_pipeline/review/index.html` and `contact_sheet.jpg` for visual review of each clip's start, middle and end. Use `--force` to regenerate all shots.
+
+For motion transfer, see the official [Wan Animate 2 workflow template](https://github.com/Comfy-Org/workflow_templates/blob/main/templates/video_wan_animate2.json) and the [Wan2.2 Animate guide](https://docs.comfy.org/tutorials/video/wan/wan2-2-animate). Export the workflow as API JSON and inspect the node IDs/field names; the example arguments in the docs are placeholders, not guaranteed IDs. Actual video-model inference must run on a machine with the compatible model files and enough compute.
