@@ -100,10 +100,11 @@ For a workflow API that uses a nonstandard prompt or image input field, set the 
 python studio_pipeline.py \
   --project examples/shotlist.motion_reference.example.json \
   --workflow workflows/wan_animate_api.json \
-  --positive-node 261 --positive-field text \
-  --seed-node 123 --seed-field seed \
-  --image-node 10 --image-field image \
-  --motion-video-node 145 --motion-video-field video \
+  --positive-node MAIN_NODE_ID --positive-field text \
+  --pose-prompt-node MAIN_NODE_ID --pose-prompt-field text_4 \
+  --seed-node SAMPLER_NODE_ID --seed-field seed \
+  --image-node LOAD_IMAGE_NODE_ID --image-field image \
+  --motion-video-node LOAD_VIDEO_NODE_ID --motion-video-field video \
   --comfy-input-dir /path/to/ComfyUI/input \
   --output outputs/episode_final.mp4 --force
 ```
@@ -117,3 +118,8 @@ After assembly, open `outputs/studio_pipeline/review/index.html`. Inspect all st
 ### Compute requirements
 
 No model weights are bundled with this repository. Wan2.2 Animate is a large model family; model variants and memory requirements vary significantly. The upstream Wan2.2 repository lists the TI2V-5B workflow as its smaller 5B path, while its 14B Animate path has a larger footprint and additional workflow dependencies. Use official Comfy-Org templates and the model card for the exact files and current hardware guidance: [Wan2.2](https://github.com/Wan-Video/Wan2.2), [ComfyUI model templates](https://github.com/Comfy-Org/workflow_templates/tree/main/templates). This environment does not run the actual model inference; install model weights on the target computer and verify one short shot before queuing a full episode.
+
+
+The official Wan Animate 2 UI template currently exposes separate inputs on the Motion Transfer subgraph: an appearance/background prompt and a pose/motion prompt. If the exported API workflow preserves these inputs, configure `--positive-node MAIN_NODE_ID --positive-field text` for appearance and `--pose-prompt-node MAIN_NODE_ID --pose-prompt-field text_4` for movement. The actual API export may flatten subgraphs or rename fields; inspect the **API prompt JSON** and replace all placeholder node IDs/fields before queuing a shot. Keep each driving-video clip short enough for the configured workflow: the current template documentation describes 81 frames per Motion Transfer subgraph (~3.4 s at 24 fps), and longer movement requires chaining/extension in the workflow.
+
+After generation completes, `outputs/studio_pipeline/review/index.html` provides human QC. The code checks file decoding and cache validity; it does not automatically approve animation quality.
