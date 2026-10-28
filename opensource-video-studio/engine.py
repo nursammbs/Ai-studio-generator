@@ -288,7 +288,7 @@ def create_video(topic: str, scenes: list[dict[str, str]], sources: list[dict[st
     concat = job / "concat.txt"
     def quoted(path: Path):
         return str(path.resolve()).replace(chr(92), "/")
-    concat.write_text("\\n".join("file '" + quoted(p) + "'" for p in segments) + "\\n", encoding="utf-8")
+    concat.write_text("\n".join("file '" + quoted(p) + "'" for p in segments) + "\n", encoding="utf-8")
     video = job / "video.mp4"
     subprocess.run([
         "ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "concat", "-safe", "0", "-i", str(concat),
@@ -299,21 +299,21 @@ def create_video(topic: str, scenes: list[dict[str, str]], sources: list[dict[st
     script_lines = [f"# {topic}", "", "Draft otomasi — verifikasi sebelum publikasi.", ""]
     for i, scene in enumerate(scenes, 1):
         script_lines += [f"## Scene {i}: {scene['heading']}", "", scene["narration"], ""]
-    (job / "script.md").write_text("\\n".join(script_lines), encoding="utf-8")
+    (job / "script.md").write_text("\n".join(script_lines), encoding="utf-8")
     src_lines = ["# Sumber riset awal", ""]
     for source in sources:
         src_lines += [f"## {source['title']}", source["url"], source["extract"], ""]
     if not sources:
         src_lines.append("Tidak ada hasil otomatis. Tambahkan sumber tepercaya secara manual.")
-    (job / "sources.md").write_text("\\n".join(src_lines), encoding="utf-8")
+    (job / "sources.md").write_text("\n".join(src_lines), encoding="utf-8")
     (job / "image_attribution.json").write_text(json.dumps(credits, ensure_ascii=False, indent=2), encoding="utf-8")
-    description = topic + "\\n\\nVideo dibantu Open Source Video Studio. Periksa fakta dan lisensi sebelum publikasi.\\n\\nSumber riset:\\n"
-    description += "\\n".join(f"- {s['title']}: {s['url']}" for s in sources)
+    description = topic + "\n\nVideo dibantu Open Source Video Studio. Periksa fakta dan lisensi sebelum publikasi.\n\nSumber riset:\n"
+    description += "\n".join(f"- {s['title']}: {s['url']}" for s in sources)
     if credits:
-        description += "\\n\\nAtribusi gambar:\\n" + "\\n".join(
+        description += "\n\nAtribusi gambar:\n" + "\n".join(
             f"- Scene {c['scene']}: {c['title']} — {c['artist']}; lisensi {c['license']}; {c['page_url']}" for c in credits
         )
-    (job / "description.txt").write_text(description + "\\n", encoding="utf-8")
+    (job / "description.txt").write_text(description + "\n", encoding="utf-8")
     if progress:
         progress(1.0, "Selesai — tinjau naskah, sumber, lisensi, suara, dan video.")
     return job
