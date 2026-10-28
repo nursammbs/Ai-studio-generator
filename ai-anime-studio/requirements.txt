@@ -1,0 +1,6 @@
+streamlit>=1.38,<2.0
+Pillow>=10.0
+imageio>=2.34
+imageio-ffmpeg>=0.5
+numpy>=1.26
+pytest>=8.0
