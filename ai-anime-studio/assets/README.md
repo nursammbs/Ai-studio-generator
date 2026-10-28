@@ -1,0 +1,1 @@
+Place `cat_running_sheet_clean.png` and `mouse_running_sheet_clean.png` from the AI Anime Studio V2 production kit into this folder. Those two transparent AI-generated 2x2 running-pose sheets are included in the downloadable kit, not committed as binary files in this repository.
