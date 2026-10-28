@@ -28,4 +28,4 @@ jobs:
       - name: Check syntax
         run: python -m py_compile app.py engine.py
       - name: Run unit tests
-        run: pytest -q
+        run: PYTHONPATH=. pytest -q
