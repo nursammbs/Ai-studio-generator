@@ -25,7 +25,11 @@ jobs:
           cache-dependency-path: ai-anime-studio/requirements.txt
       - name: Install dependencies
         run: python -m pip install -r requirements.txt
+      - name: Install FFmpeg for media integration tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
       - name: Compile Python files
-        run: python -m py_compile app.py engine.py sprite_animator.py sprite_animator_v2.py youtube_upload.py studio_pipeline.py
+        run: python -m py_compile app.py engine.py sprite_animator.py sprite_animator_v2.py youtube_upload.py studio_pipeline.py workflow_inspect.py
       - name: Run tests
         run: python -m pytest -q

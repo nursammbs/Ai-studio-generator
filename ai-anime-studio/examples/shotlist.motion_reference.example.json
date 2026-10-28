@@ -1,0 +1,42 @@
+{
+  "title": "Misi Keju — Wan Animate 2 motion-transfer shots",
+  "language": "id-ID",
+  "style_bible": "polished 2D cel-animation, clean ink contours, warm kitchen palette, expressive cartoon posing, coherent 16:9 composition",
+  "character_bible": "Use the approved gray cartoon cat model sheet: triangular ears, yellow eyes, light muzzle, same head-body proportions and gray markings in every shot.",
+  "background_bible": "Warm animated kitchen with cream cupboards, tiled floor, a small wooden table and a wedge of yellow cheese; consistent layout and palette between cuts.",
+  "negative_prompt": "flicker, identity drift, extra limbs, changing ears or tail, warped face, duplicate character, melting anatomy, jitter, strobing, random cuts, subtitles, text, logo, watermark",
+  "shots": [
+    {
+      "id": "01_cheese_discovery",
+      "reference_image": "../assets/refs/cat_model_front.png",
+      "motion_video": "../assets/motion/01_sneak_and_peek.mp4",
+      "prompt": "A short sneaking movement followed by a curious head turn and wide-eyed pause. Follow the driving video's movement and timing, keep the face readable.",
+      "seed": 41001,
+      "speed": 0.94
+    },
+    {
+      "id": "02_chase_start",
+      "reference_image": "../assets/refs/cat_model_fullbody.png",
+      "motion_video": "../assets/motion/02_run_and_skid.mp4",
+      "prompt": "A quick run toward screen right, arms and legs cycle rapidly, then a comic skid and sharp look back. Preserve left-to-right screen direction.",
+      "seed": 41002,
+      "speed": 1.12
+    },
+    {
+      "id": "03_kitchen_chaos",
+      "reference_image": "../assets/refs/cat_model_fullbody.png",
+      "motion_video": "../assets/motion/03_jump_and_land.mp4",
+      "prompt": "An exaggerated anticipatory crouch, a short leap, then a squashy landing and an embarrassed blink. Use the provided motion timing.",
+      "seed": 41003,
+      "speed": 1.0
+    },
+    {
+      "id": "04_final_gag",
+      "reference_image": "../assets/refs/cat_model_front.png",
+      "motion_video": "../assets/motion/04_surprised_reaction.mp4",
+      "prompt": "Hold a readable surprised reaction, eyes widening and ears raising, then slowly glance toward a wedge of cheese just out of frame.",
+      "seed": 41004,
+      "speed": 0.9
+    }
+  ]
+}

@@ -82,3 +82,55 @@ python studio_pipeline.py \
 Semua node ID dan nama field pada contoh hanyalah ilustrasi. `--comfy-input-dir` harus menunjuk ke folder input **di mesin yang menjalankan ComfyUI**; skrip menyalin motion clip ke sana dan memasukkan nama file ke node video yang dipilih. Workflow harus benar-benar memakai node video itu untuk mengendalikan animasi. Tidak semua workflow Wan-Animate mempunyai struktur node/input yang sama.
 
 Motion reference meningkatkan arahan gerak, tetapi tidak menjamin hasil sempurna: gerakan sumber yang rumit, occlusion, kamera, proporsi hewan kartun, dan perbedaan bentuk manusia/hewan dapat menghasilkan deformasi. Tinjau setiap take dan bersihkan shot penting di OpenToonz/compositing.
+
+
+## Update pipeline: workflow API fields are configurable
+
+The new `studio_pipeline.py` accepts custom input names, because native ComfyUI workflows do not all use the same node fields. It also writes a three-frame-per-shot HTML review page and contact sheet after rendering; every shot has a start, middle and end frame for a human continuity check.
+
+The cache is now keyed to a fingerprint of the source reference image, optional driving video, workflow file, prompt, seed, style/character brief, speed and node configuration. If those values change, the old output is **not** silently reused. Add `--force` to regenerate all shots even when the fingerprint matches.
+
+## Current ComfyUI native workflow option: Wan Animate 2
+
+Comfy-Org publishes a newer native template called [Wan Animate 2: Motion Transfer](https://github.com/Comfy-Org/workflow_templates/blob/main/templates/video_wan_animate2.json). There is also a documented earlier [Wan2.2 Animate workflow](https://docs.comfy.org/tutorials/video/wan/wan2-2-animate), which uses a reference image and motion video in its Move/animation mode. Template internals and node IDs change, so export the workflow as **API format** in the installed ComfyUI version and inspect that exported prompt dictionary before running the script.
+
+For a workflow API that uses a nonstandard prompt or image input field, set the CLI field options explicitly. Example node IDs below are placeholders; they must match your API export:
+
+```bash
+python studio_pipeline.py \
+  --project examples/shotlist.motion_reference.example.json \
+  --workflow workflows/wan_animate_api.json \
+  --positive-node MAIN_NODE_ID --positive-field text \
+  --pose-prompt-node MAIN_NODE_ID --pose-prompt-field text_4 \
+  --seed-node SAMPLER_NODE_ID --seed-field seed \
+  --image-node LOAD_IMAGE_NODE_ID --image-field image \
+  --motion-video-node LOAD_VIDEO_NODE_ID --motion-video-field video \
+  --comfy-input-dir /path/to/ComfyUI/input \
+  --output outputs/episode_final.mp4 --force
+```
+
+Use the exact node and field names present in your exported API workflow. If the graph includes a subgraph, conditioning nodes or multiple samplers, select the actual input nodes in that graph. The command is not a one-click import of a UI-format workflow: it expects the workflow to be exported into the API format accepted by `POST /prompt`.
+
+### Review before publication
+
+After assembly, open `outputs/studio_pipeline/review/index.html`. Inspect all starts/middles/ends and reject shots with changing character design, flicker, malformed limbs/ears/tails, broken object continuity, screen-direction jumps or abrupt camera moves. The contact sheet is a triage tool, **not** an automated animation-quality score. Generate alternate seeds for failures and manually clean essential shots in OpenToonz or a compositing application.
+
+### Compute requirements
+
+No model weights are bundled with this repository. Wan2.2 Animate is a large model family; model variants and memory requirements vary significantly. The upstream Wan2.2 repository lists the TI2V-5B workflow as its smaller 5B path, while its 14B Animate path has a larger footprint and additional workflow dependencies. Use official Comfy-Org templates and the model card for the exact files and current hardware guidance: [Wan2.2](https://github.com/Wan-Video/Wan2.2), [ComfyUI model templates](https://github.com/Comfy-Org/workflow_templates/tree/main/templates). This environment does not run the actual model inference; install model weights on the target computer and verify one short shot before queuing a full episode.
+
+
+The official Wan Animate 2 UI template currently exposes separate inputs on the Motion Transfer subgraph: an appearance/background prompt and a pose/motion prompt. If the exported API workflow preserves these inputs, configure `--positive-node MAIN_NODE_ID --positive-field text` for appearance and `--pose-prompt-node MAIN_NODE_ID --pose-prompt-field text_4` for movement. The actual API export may flatten subgraphs or rename fields; inspect the **API prompt JSON** and replace all placeholder node IDs/fields before queuing a shot. Keep each driving-video clip short enough for the configured workflow: the current template documentation describes 81 frames per Motion Transfer subgraph (~3.4 s at 24 fps), and longer movement requires chaining/extension in the workflow.
+
+After generation completes, `outputs/studio_pipeline/review/index.html` provides human QC. The code checks file decoding and cache validity; it does not automatically approve animation quality.
+
+
+## Find node IDs without guessing
+
+Use the new inspector before starting a long render:
+
+```bash
+python workflow_inspect.py --workflow workflows/wan_animate_api.json --output outputs/workflow_nodes.md
+```
+
+Open `outputs/workflow_nodes.md` and use the exact node IDs and API input names it reports for the appearance prompt, pose prompt, seed, reference image and driving video. If the tool reports that the file is a UI graph (with a nodes array), export **API format** from ComfyUI and run the inspector again on that API JSON. This is particularly useful for Wan Animate 2, whose nested subgraphs can be flattened and assigned different IDs by the installed ComfyUI version.
