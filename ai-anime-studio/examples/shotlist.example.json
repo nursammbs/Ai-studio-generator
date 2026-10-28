@@ -1,0 +1,37 @@
+{
+  "title": "Misi Keju yang Hilang",
+  "language": "id-ID",
+  "style_bible": "premium 2D family comedy cartoon, hand-drawn cel-animation look, confident ink contours, consistent line weight, layered painted backgrounds, expressive squash-and-stretch, expressive eyes, cinematic lighting, clear TV-animation staging, 16:9",
+  "character_bible": "The cat is a small gray cat with triangular ears and yellow eyes; the mouse is a tiny warm-gray mouse with pink round ears and a long thin tail. Maintain colors, proportions, facial features, and markings in every shot.",
+  "negative_prompt": "flicker, changing character design, identity drift, extra limbs, duplicate character, melting anatomy, warped face, jitter, strobing, random cuts, camera teleportation, subtitles, text, logo, watermark, low resolution",
+  "shots": [
+    {
+      "id": "01_cheese_discovery",
+      "reference_image": "assets/01_cheese_discovery.png",
+      "prompt": "The mouse finds a wedge of cheese on the kitchen table. The cat peeks around the doorway, eyes widening. Hold a readable establishing pose, then a gentle push-in.",
+      "seed": 41001,
+      "speed": 1.0
+    },
+    {
+      "id": "02_chase_start",
+      "reference_image": "assets/02_chase_start.png",
+      "prompt": "The mouse snatches the cheese and darts right. The cat reacts one beat late, compresses into a crouch, then launches into a chase. Both silhouettes remain clear; movement stays left-to-right.",
+      "seed": 41002,
+      "speed": 1.12
+    },
+    {
+      "id": "03_kitchen_chaos",
+      "reference_image": "assets/03_kitchen_chaos.png",
+      "prompt": "The cat skids around a kitchen corner and flour puffs into the air. The mouse slips under a chair while protecting the cheese. Use a comic anticipation and impact beat.",
+      "seed": 41003,
+      "speed": 1.05
+    },
+    {
+      "id": "04_final_gag",
+      "reference_image": "assets/04_final_gag.png",
+      "prompt": "The cat leaps for the cheese but lands in a flour sack. A soft white puff clears to reveal a flour-covered cat blinking in surprise while the mouse takes a tiny bite of cheese. Hold the final comic pose.",
+      "seed": 41004,
+      "speed": 0.92
+    }
+  ]
+}
