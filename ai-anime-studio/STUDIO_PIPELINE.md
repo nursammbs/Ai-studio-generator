@@ -74,7 +74,7 @@ python studio_pipeline.py \
   --project examples/shotlist.example.json \
   --workflow workflows/wan_animate_api.json \
   --positive-node 6 --seed-node 3 --image-node 56 \
-  --motion-video-node 58 --motion-video-field video \
+  --motion-video-node 58 --motion-video-field file \
   --comfy-input-dir /path/to/ComfyUI/input \
   --output outputs/episode_animate.mp4
 ```
@@ -147,3 +147,14 @@ Copy the kit's `ai-anime-studio/assets/refs/`, `ai-anime-studio/assets/motion/`,
 In the current Comfy-Org UI template, the top-level **LoadVideo** node's filename input is usually `file` (the driving video itself is passed to the Motion Transfer subgraph's `video` input). Motion Transfer exposes a main appearance/background prompt and a separate pose prompt. In this pipeline, the input names are configurable; set `--motion-video-node` to the LoadVideo node ID and `--motion-video-field file`, but only after checking the API JSON report. The subgraph's `text` and `text_4` fields are the current UI template's prompt labels, not guaranteed API field names after export. The sampler seed node may also be internal; select the actual node/field reported by the API inspector.
 
 **Important:** the official UI workflow is not itself an API prompt. Export API format in ComfyUI, inspect it with `workflow_inspect.py`, then do a single-shot validation. The script cannot infer hidden/nested node mappings that the export did not expose.
+
+
+## Recreate the starter guides locally
+
+Place the two transparent pose sheets from the starter kit in `ai-anime-studio/assets/source/`, then run from the `ai-anime-studio/` folder:
+
+```bash
+python generate_motion_guides.py
+```
+
+The generator writes the four PNG reference frames and four 81-frame MP4 blocking guides to `assets/refs/` and `assets/motion/`. It is deterministic sprite/cutout animation for motion-reference testing; it does not run an AI video model.
