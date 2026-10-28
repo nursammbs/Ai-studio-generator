@@ -48,3 +48,8 @@ The generator drafts promotional content; it cannot guarantee sales, virality, o
 ## Experimental animation module
 
 The repository also contains an early **AI Anime Studio** prototype in [ai-anime-studio](ai-anime-studio/README.md). It combines a local ComfyUI API integration with a three-scene MP4 animatic renderer. Its offline demo and API mock tests validate the rendering and integration scaffolding; true image generation requires a local ComfyUI installation, models, and an exported API workflow. It is not yet a full frame-by-frame anime generator.
+
+
+## AI Anime Studio pilot milestone
+
+An AI-assisted cartoon pilot is now rendered: original AI-generated cat/mouse character poses are composited into a 15-second 1280×720, 24 FPS MP4 with moving backgrounds, pose changes and an original synthesized audio cue. The source renderer is in [ai-anime-studio/sprite_animator.py](ai-anime-studio/sprite_animator.py). It is sprite animation, not full generative video; use the accompanying downloadable pilot package for the PNG pose sheet and finished MP4.
