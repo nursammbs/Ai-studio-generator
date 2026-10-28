@@ -5,11 +5,12 @@ An experimental local-first pipeline combining **ComfyUI** (AI image generation)
 ## What works
 - Offline three-scene cartoon animatic with original vector characters and deterministic motion; no GPU or model download required.
 - ComfyUI local API client: connection test, prompt/seed injection, job submission, history polling, and generated-image download.
+- Storyboard mode accepts an AI-generated 3-panel image, crops its three panels, adds captions and gentle camera movement, and exports an MP4.
 - AI mode generates three scene stills using a workflow you provide, then creates a short MP4 with gentle camera push-in.
 - Automated tests cover workflow mutation, a mocked ComfyUI HTTP API, and MP4 render/decode smoke tests.
 
 ## Limitations — please read
-This is a prototype, not an automatic anime studio. In AI mode it generates **still images** and turns them into a pan/zoom animatic; it does not generate full frame-by-frame body animation. Reusing the same character description helps but does not guarantee character identity consistency. Stronger consistency requires a compatible reference-image workflow (for example IP-Adapter/ControlNet) configured and tested with your installed model.
+This is a prototype, not an automatic anime studio. Storyboard mode animates camera movement over a generated triptych; ComfyUI mode generates **still images** and turns them into a pan/zoom animatic. Neither mode generates full frame-by-frame body animation. Reusing the same character description helps but does not guarantee character identity consistency. Stronger consistency requires a compatible reference-image workflow (for example IP-Adapter/ControlNet) configured and tested with your installed model.
 
 The build environment had no running local ComfyUI server or installed image-generation checkpoint, so real model inference was not executed here. The offline MP4 was rendered and decode-tested, and the API integration has mock-server tests.
 
@@ -33,6 +34,14 @@ source .venv/bin/activate
 python -m pip install -r requirements.txt
 python -m streamlit run app.py
 ```
+
+## Storyboard image workflow
+1. Generate a 3-panel storyboard with your preferred image model, keeping the same character design in all panels.
+2. In the app, upload the PNG/JPG under **Ubah storyboard AI menjadi video**.
+3. Adjust the normalized left/right panel boundaries to avoid white gutters.
+4. Render and download the captioned MP4.
+
+The renderer can make an actual video from an AI-generated storyboard, but its motion is camera pan/zoom, not new AI-generated motion frames.
 
 ## AI workflow setup
 1. Start ComfyUI locally (default URL: `http://127.0.0.1:8188`).
