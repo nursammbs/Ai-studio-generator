@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 import streamlit as st
-from engine import ComfyUIClient, render_image_animatic, render_offline_animatic
+from engine import ComfyUIClient, concatenate_videos, render_image_animatic, render_offline_animatic
 
 APP_DIR = Path(__file__).resolve().parent
 OUTPUT_DIR = APP_DIR / "outputs"
@@ -27,6 +27,8 @@ with st.sidebar:
     st.header("2. Workflow API")
     workflow_file = st.file_uploader("Upload workflow JSON format API", type=["json"])
     st.caption("Di ComfyUI, buka workflow text-to-image yang bekerja lalu pilih Export → API.")
+    video_workflow_file = st.file_uploader("Workflow API image-to-video (opsional)", type=["json"], key="video_workflow")
+    st.caption("Workflow I2V harus sudah teruji di ComfyUI. Upload di sini untuk membuat klip bergerak dari gambar adegan.")
 
 left, right = st.columns(2)
 with left:
@@ -58,6 +60,10 @@ with right:
     seed_id = st.text_input("ID seed node (KSampler)", value="3")
     seed_start = st.number_input("Seed awal", min_value=0, max_value=2**32-1, value=12345, step=1)
     st.info("ID 6/7/3 hanya contoh. Sesuaikan dengan node ID di workflow yang di-export.")
+    st.write("Node IDs workflow image-to-video (opsional)")
+    video_positive_id = st.text_input("ID prompt positif I2V", value="6")
+    video_seed_id = st.text_input("ID seed I2V", value="3")
+    video_image_id = st.text_input("ID node Load Image I2V", value="10")
 
 st.divider()
 st.subheader("3. Ubah storyboard AI menjadi video")
@@ -138,18 +144,40 @@ with col_ai:
                     destination = project_dir / f"scene_{index + 1}.png"
                     raw_path.replace(destination)
                     generated.append(destination)
-                progress.progress(1.0, text="Merender MP4...")
-                video = render_image_animatic(
-                    generated, OUTPUT_DIR / "comfyui_three_scene_animatic.mp4",
-                    fps=fps, seconds_per_image=seconds,
-                )
+                if video_workflow_file is not None:
+                    video_workflow = json.loads(video_workflow_file.getvalue().decode("utf-8"))
+                    if isinstance(video_workflow.get("prompt"), dict):
+                        video_workflow = video_workflow["prompt"]
+                    clips = []
+                    for index, image_path in enumerate(generated):
+                        progress.progress((index + 1) / 3, text=f"Menganimasikan adegan {index + 1}/3 dengan workflow I2V...")
+                        clip_path = project_dir / f"motion_scene_{index + 1}.mp4"
+                        client.generate_video_from_image(
+                            video_workflow,
+                            positive_node_id=video_positive_id.strip(),
+                            seed_node_id=video_seed_id.strip(),
+                            image_node_id=video_image_id.strip(),
+                            positive_prompt=scene_prompts[index],
+                            seed=int(seed_start) + index,
+                            source_image=image_path,
+                            output_path=clip_path,
+                            timeout=900,
+                        )
+                        clips.append(clip_path)
+                    progress.progress(1.0, text="Menggabungkan klip hasil generasi video...")
+                    video = concatenate_videos(clips, OUTPUT_DIR / "comfyui_three_scene_motion.mp4", fps=fps)
+                    note = "Klip gerak dibuat oleh workflow image-to-video yang kamu unggah lalu digabung menjadi MP4. Hasil dan konsistensi karakter bergantung pada model/workflow; periksa hasil sebelum publikasi."
+                else:
+                    progress.progress(1.0, text="Merender animatic pan/zoom...")
+                    video = render_image_animatic(
+                        generated, OUTPUT_DIR / "comfyui_three_scene_animatic.mp4",
+                        fps=fps, seconds_per_image=seconds,
+                    )
+                    note = "Tiga gambar dibuat oleh workflow ComfyUI. Gerakan berupa camera push-in/pan, bukan animasi tubuh frame-by-frame. Unggah workflow I2V untuk generasi gerakan."
                 st.session_state["last_video"] = str(video)
                 st.session_state["last_images"] = [str(path) for path in generated]
-                st.session_state["last_note"] = (
-                    "Tiga gambar dibuat oleh workflow ComfyUI yang dipilih. Gerakan MP4 berupa camera push-in/pan, "
-                    "bukan animasi tubuh frame-by-frame. Konsistensi karakter bergantung pada workflow/model."
-                )
-                st.success("Generasi tiga adegan dan rendering MP4 selesai.")
+                st.session_state["last_note"] = note
+                st.success("Pipeline adegan selesai dan MP4 dirender.")
             except Exception as exc:
                 st.error(f"Pipeline gagal: {exc}")
 
