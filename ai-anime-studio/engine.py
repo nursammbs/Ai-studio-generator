@@ -294,3 +294,68 @@ def render_image_animatic(image_paths: Iterable[str | Path], output_path: str | 
     finally:
         reader.close()
     return output_path
+
+
+
+def render_storyboard_triptych(image_path: str | Path, output_path: str | Path, *,
+                               panel_bounds: list[tuple[float, float]] | None = None,
+                               width: int = 960, height: int = 540, fps: int = 24,
+                               seconds_per_panel: int = 3) -> Path:
+    """Crop a 3-panel storyboard image and render a captioned cinematic MP4.
+
+    panel_bounds is an optional list of three normalized (left, right) x positions
+    from 0.0 to 1.0, excluding gutters. Default boundaries suit a near-equal triptych.
+    """
+    with Image.open(image_path) as source:
+        storyboard = source.convert("RGB")
+    if panel_bounds is None:
+        panel_bounds = [(0.0, 0.325), (0.337, 0.661), (0.673, 1.0)]
+    if len(panel_bounds) != 3:
+        raise ValueError("Storyboard harus memiliki tepat tiga panel.")
+    if fps < 1 or seconds_per_panel < 1 or width < 320 or height < 180:
+        raise ValueError("Pengaturan resolusi, FPS, atau durasi tidak valid.")
+    captions = [
+        "SCENE 1 — INTRODUCTION",
+        "SCENE 2 — ACTION",
+        "SCENE 3 — ENDING",
+    ]
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    frames = []
+    title_font, caption_font = _font(max(18, width // 42), True), _font(max(15, width // 48))
+    for scene_idx, (left_n, right_n) in enumerate(panel_bounds):
+        left = max(0, min(storyboard.width - 1, int(storyboard.width * left_n)))
+        right = max(left + 1, min(storyboard.width, int(storyboard.width * right_n)))
+        panel = storyboard.crop((left, 0, right, storyboard.height))
+        for k in range(fps * seconds_per_panel):
+            progress = k / max(1, fps * seconds_per_panel - 1)
+            scale = 1.0 + 0.09 * progress
+            crop_w, crop_h = max(1, int(panel.width / scale)), max(1, int(panel.height / scale))
+            cx = panel.width / 2 + (progress - .5) * panel.width * .025 * (1 if scene_idx % 2 == 0 else -1)
+            cy = panel.height / 2
+            x0 = max(0, min(panel.width - crop_w, int(cx - crop_w / 2)))
+            y0 = max(0, min(panel.height - crop_h, int(cy - crop_h / 2)))
+            frame = panel.crop((x0, y0, x0 + crop_w, y0 + crop_h)).resize((width, height), Image.Resampling.LANCZOS)
+            draw = ImageDraw.Draw(frame)
+            draw.rectangle((0, 0, width, 48), fill=(16, 22, 34))
+            draw.text((18, 12), "AI ANIME STUDIO  •  STORYBOARD CUT", font=title_font, fill=(255, 255, 255))
+            draw.rectangle((0, height - 48, width, height), fill=(16, 22, 34))
+            caption = captions[scene_idx]
+            bounds = draw.textbbox((0, 0), caption, font=caption_font)
+            draw.text(((width - (bounds[2] - bounds[0])) / 2, height - 36), caption,
+                      font=caption_font, fill=(255, 255, 255))
+            frames.append(np.asarray(frame))
+    writer = imageio.get_writer(str(output_path), fps=fps, codec="libx264", quality=8, macro_block_size=1)
+    try:
+        for frame in frames:
+            writer.append_data(frame)
+    finally:
+        writer.close()
+    reader = imageio.get_reader(str(output_path))
+    try:
+        if reader.get_data(0).shape[:2] != (height, width):
+            raise RuntimeError("Dimensi video storyboard tidak sesuai.")
+        reader.get_data(len(frames) - 1)
+    finally:
+        reader.close()
+    return output_path
