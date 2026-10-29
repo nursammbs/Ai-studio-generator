@@ -9,6 +9,9 @@ os.environ["VIDEO_API_HUB_DB"] = str(TEST_DB)
 for name in ("HIGGSFIELD_API_KEY", "RUNWAY_API_KEY", "FAL_KEY", "OPENAI_API_KEY"):
     os.environ.pop(name, None)
 
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 from fastapi.testclient import TestClient
 import app as hub
 
