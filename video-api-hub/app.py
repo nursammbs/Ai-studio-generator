@@ -190,6 +190,10 @@ async def _submit_provider(provider: str, req: JobRequest) -> tuple[str, str | N
             body: dict[str, Any] = {"prompt": req.prompt, "duration": req.duration,
                 "resolution": req.resolution, "aspect_ratio": req.aspect_ratio,
                 "generate_audio": req.generate_audio}
+            if req.image_url:
+                body["image_url"] = req.image_url
+            if req.video_url:
+                body["video_url"] = req.video_url
             body.update(req.options)
             headers = {"Authorization": "Key " + os.environ["HIGGSFIELD_API_KEY"].strip(), "Content-Type": "application/json"}
             response = await client.post(base + "/" + endpoint, headers=headers, json=body)
@@ -348,10 +352,10 @@ async def create_jobs(req: JobRequest) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail="Konfirmasi biaya/kuota diperlukan sebelum submit generasi.")
     if len(set(req.providers)) != len(req.providers):
         raise HTTPException(status_code=400, detail="Provider yang sama tidak boleh dipilih dua kali.")
-    if req.mode == "image_to_video" and "runway" in req.providers and not req.image_url:
-        raise HTTPException(status_code=400, detail="Runway image-to-video memerlukan URL gambar HTTPS.")
-    if req.mode == "video_to_video" and "runway" in req.providers and not req.video_url:
-        raise HTTPException(status_code=400, detail="Runway video-to-video memerlukan URL video HTTPS.")
+    if req.mode == "image_to_video" and not req.image_url:
+        raise HTTPException(status_code=400, detail="Image-to-video memerlukan URL gambar HTTPS yang bisa diakses provider.")
+    if req.mode == "video_to_video" and not req.video_url:
+        raise HTTPException(status_code=400, detail="Video-to-video memerlukan URL video HTTPS yang bisa diakses provider.")
     results = await asyncio.gather(*[_submit_one(provider, req) for provider in req.providers])
     return {"jobs": results}
 
