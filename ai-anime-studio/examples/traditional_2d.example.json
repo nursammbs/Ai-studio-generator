@@ -3,8 +3,8 @@
   "height": 720,
   "fps": 24,
   "characters": {
-    "cat": { "sheet": "../assets/source/cat_pose_sheet.png" },
-    "mouse": { "sheet": "../assets/source/mouse_pose_sheet.png" }
+    "cat": { "sheet": "../assets/source/cat_running_sheet_clean.png" },
+    "mouse": { "sheet": "../assets/source/mouse_running_sheet_clean.png" }
   },
   "scenes": [
     {
