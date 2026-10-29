@@ -26,7 +26,11 @@ jobs:
           cache-dependency-path: video-api-hub/requirements.txt
       - name: Install dependencies
         run: pip install -r requirements.txt
-      - name: Compile app
-        run: python -m py_compile app.py
+      - name: Install optional MCP bridge dependencies
+        run: pip install -r requirements-mcp.txt
+      - name: Compile API and MCP apps
+        run: python -m py_compile app.py mcp_server.py
+      - name: Verify MCP bridge import
+        run: python -c "import mcp_server; print('MCP bridge imports successfully')"
       - name: Run unit tests
         run: pytest -q
