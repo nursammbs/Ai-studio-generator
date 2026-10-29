@@ -1,0 +1,68 @@
+{
+  "width": 1280,
+  "height": 720,
+  "fps": 24,
+  "characters": {
+    "cat": { "sheet": "../assets/source/cat_pose_sheet.png" },
+    "mouse": { "sheet": "../assets/source/mouse_pose_sheet.png" }
+  },
+  "scenes": [
+    {
+      "id": "01_discovery",
+      "duration": 4.0,
+      "background": "#e5ece9",
+      "ground_y": 570,
+      "ground_color": "#b9c4bf",
+      "caption": "A quiet moment before the chase.",
+      "actors": [
+        {
+          "character": "cat",
+          "height": 270,
+          "keyframes": [
+            {"t": 0.0, "x": 210, "y": 570, "scale": 0.92, "rotation": 0, "pose": 0},
+            {"t": 1.4, "x": 230, "y": 570, "scale": 1.0, "rotation": 0, "pose": 1, "ease": "smoothstep"},
+            {"t": 2.0, "x": 230, "y": 570, "scale": 1.0, "rotation": 0, "pose": 2},
+            {"t": 4.0, "x": 230, "y": 570, "scale": 1.0, "rotation": 0, "pose": 2}
+          ]
+        },
+        {
+          "character": "mouse",
+          "height": 125,
+          "keyframes": [
+            {"t": 0.0, "x": 900, "y": 570, "scale": 1.0, "rotation": 0, "pose": 0},
+            {"t": 2.1, "x": 900, "y": 570, "scale": 1.0, "rotation": -5, "pose": 1},
+            {"t": 4.0, "x": 1040, "y": 570, "scale": 1.0, "rotation": 0, "pose": 3, "ease": "smoothstep"}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "02_chase",
+      "duration": 3.5,
+      "background": "#dce8eb",
+      "ground_y": 570,
+      "ground_color": "#b3c0c4",
+      "caption": "The chase begins!",
+      "actors": [
+        {
+          "character": "cat",
+          "height": 270,
+          "cycle_fps": 8,
+          "keyframes": [
+            {"t": 0, "x": 240, "y": 570, "scale": 1.0, "rotation": -3, "pose": 0},
+            {"t": 3.5, "x": 930, "y": 570, "scale": 1.0, "rotation": 3, "pose": 0}
+          ]
+        },
+        {
+          "character": "mouse",
+          "height": 125,
+          "cycle_fps": 10,
+          "keyframes": [
+            {"t": 0, "x": 650, "y": 570, "scale": 1.0, "rotation": 0, "pose": 0},
+            {"t": 3.5, "x": 1120, "y": 570, "scale": 1.0, "rotation": 0, "pose": 0}
+          ]
+        }
+      ]
+    }
+  ]
+}
