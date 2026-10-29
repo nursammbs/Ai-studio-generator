@@ -69,3 +69,36 @@ This is a single-user local MVP, not a hardened SaaS. Do not expose it to the pu
 - https://docs.fal.ai/
 - https://developers.openai.com/api/docs
 - https://modelcontextprotocol.io/
+
+
+## Optional MCP bridge (local)
+
+The API website can also be exposed to compatible local AI hosts through an MCP stdio server. Install its optional SDK, start the Hub first, then run the bridge from this directory:
+
+~~~bash
+pip install -r requirements-mcp.txt
+# Terminal 1: start web API
+uvicorn app:app --host 127.0.0.1 --port 8090
+# Terminal 2: register/start mcp_server.py from your MCP host
+python mcp_server.py
+~~~
+
+Register the MCP server command in the host using the absolute path to the Python interpreter and absolute path to mcp_server.py. Example shape (replace paths with your machine's real paths):
+
+~~~json
+{
+  "mcpServers": {
+    "video-api-hub": {
+      "command": "/absolute/path/to/video-api-hub/.venv/bin/python",
+      "args": ["/absolute/path/to/video-api-hub/mcp_server.py"],
+      "env": {
+        "VIDEO_API_HUB_URL": "http://127.0.0.1:8090"
+      }
+    }
+  }
+}
+~~~
+
+Tools exposed: list_video_providers, get_video_hub_health, create_video_job, get_video_job_status, and draft_video_script_or_prompt. The generation tool requires a cost-confirmation argument, and its description instructs an agent to ask the user first. The MCP server contains no provider API keys; the FastAPI backend still owns credentials.
+
+This is a local stdio MCP server, not a publicly hosted remote MCP endpoint. To connect a remote host such as ChatGPT web, deploy a secured HTTPS MCP endpoint with authentication and per-user permissions; do not expose the current unauthenticated single-user backend publicly.
