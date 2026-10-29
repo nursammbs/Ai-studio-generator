@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Video API Hub</title>
+<style>
+:root{color-scheme:dark;--bg:#0b0d12;--panel:#131720;--panel2:#191e29;--line:#2a3140;--text:#f2f5fa;--muted:#a2adbf;--accent:#9ae6b4;--accent2:#b6c8ff;--danger:#ffaaa6}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(900px 400px at 20% -10%,#263042 0%,transparent 65%),var(--bg);color:var(--text);font:15px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif}
+a{color:var(--accent2)}button,input,select,textarea{font:inherit}button{cursor:pointer;border:1px solid #51607a;background:#e8efff;color:#151a25;border-radius:10px;padding:10px 14px;font-weight:750}button:disabled{opacity:.45;cursor:not-allowed}.wrap{max-width:1420px;margin:auto;padding:28px 20px 80px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:18px;margin-bottom:28px}.brand{display:flex;gap:13px;align-items:center}.logo{width:44px;height:44px;border-radius:13px;background:linear-gradient(140deg,#b6c8ff,#9ae6b4);display:grid;place-items:center;color:#17202e;font-size:22px;font-weight:900}.eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);font-weight:800}.top h1{font-size:24px;line-height:1.2;margin:3px 0}.top p,.muted{color:var(--muted)}.top p{margin:4px 0}.chip{border:1px solid var(--line);border-radius:999px;color:var(--muted);padding:7px 11px;font-size:12px;white-space:nowrap}
+.hero{display:grid;grid-template-columns:1.5fr 1fr;gap:18px;margin-bottom:24px}.hero-main,.hero-side,.panel,.provider,.job,.resultbox{border:1px solid var(--line);background:rgba(19,23,32,.91);border-radius:17px}.hero-main{padding:25px;background:linear-gradient(125deg,#192334,#131720 65%)}.hero h2{font-size:30px;line-height:1.1;letter-spacing:-.04em;margin:10px 0 14px;max-width:700px}.hero p{color:var(--muted);max-width:730px}.pillrow{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}.pill{border:1px solid #3b4559;background:#202837;border-radius:999px;padding:6px 10px;font-size:12px;color:#d2dcf3}.hero-side{padding:23px;display:flex;flex-direction:column;justify-content:center}.hero-side h3{margin:0 0 8px}.hero-side p{margin:0 0 10px;font-size:13px}.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}.step{padding:11px;border-radius:10px;background:var(--panel2);font-size:12px;color:var(--muted)}.step b{display:block;color:var(--text);font-size:13px;margin-bottom:4px}
+.section-head{display:flex;justify-content:space-between;align-items:end;gap:16px;margin:28px 0 13px}.section-head h2{font-size:19px;margin:0}.section-head p{font-size:13px;color:var(--muted);margin:3px 0 0}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.provider{padding:16px;display:flex;flex-direction:column;gap:9px;min-height:178px}.provider-top{display:flex;align-items:center;gap:10px}.provider-icon{width:37px;height:37px;display:grid;place-items:center;background:#252c3a;border-radius:11px;font-weight:900}.provider h3{margin:0;font-size:15px}.provider .desc{font-size:12px;color:var(--muted);margin:0;min-height:38px}.state{font-size:11px;border-radius:999px;padding:4px 8px;display:inline-flex;align-self:start;background:#382e21;color:#ffcf91}.state.ready{background:#183329;color:#9ae6b4}.provider-foot{display:flex;align-items:center;justify-content:space-between;margin-top:auto}.tiny{font-size:11px;color:var(--muted)}
+.columns{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(320px,.9fr);gap:16px;align-items:start}.panel{padding:20px}.panel h2{margin:0;font-size:18px}.panel-sub{font-size:12px;color:var(--muted);margin:5px 0 17px}.field{display:flex;flex-direction:column;gap:6px;margin:13px 0}.field label{font-size:12px;color:#cdd6e6;font-weight:700}.field input,.field select,.field textarea{width:100%;padding:11px 12px;background:#0f131b;border:1px solid #343d4e;color:var(--text);border-radius:9px;outline:none}.field input:focus,.field select:focus,.field textarea:focus{border-color:#9baeff}.field textarea{resize:vertical;min-height:120px}.twocol{display:grid;grid-template-columns:1fr 1fr;gap:12px}.provider-choices{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.choice{display:flex;gap:8px;align-items:start;background:#0f131b;border:1px solid var(--line);padding:10px;border-radius:10px;font-size:12px}.choice input{margin-top:3px;accent-color:#9ae6b4}.choice small{display:block;color:var(--muted)}.checkline{display:flex;gap:9px;align-items:flex-start;font-size:12px;color:var(--muted);margin:17px 0}.checkline input{margin-top:4px;accent-color:#9ae6b4}.rowbtn{display:flex;gap:9px;align-items:center;flex-wrap:wrap}.softbtn{background:#202736;color:var(--text);border-color:#384359}.msg{padding:10px 12px;border-radius:9px;background:#202736;color:#d2dcf3;margin:12px 0;font-size:13px}.msg.error{background:#3a2427;color:#ffcfcb}.msg.success{background:#19352a;color:#b1f5c9}.jobs{display:flex;flex-direction:column;gap:10px}.job{padding:14px}.job-header{display:flex;justify-content:space-between;gap:10px}.job h3{font-size:13px;margin:0}.job p{font-size:12px;color:var(--muted);margin:7px 0;overflow-wrap:anywhere}.status{font-size:10px;text-transform:uppercase;letter-spacing:.08em;border-radius:99px;background:#253044;color:#d3def8;padding:4px 7px;height:max-content}.status.completed{background:#193a2c;color:#adf1c9}.status.failed{background:#46262a;color:#ffc0c0}.output{display:block;margin-top:10px;font-size:12px}.resultbox{padding:17px;margin-top:15px}.resultbox h3{margin:0 0 10px}.note{font-size:12px;color:var(--muted);line-height:1.55}.footer{color:var(--muted);font-size:11px;margin-top:35px;border-top:1px solid var(--line);padding-top:16px}
+@media(max-width:1050px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.hero{grid-template-columns:1fr}.columns{grid-template-columns:1fr}}
+@media(max-width:600px){.wrap{padding:18px 12px 56px}.top{align-items:flex-start}.top .chip{display:none}.hero h2{font-size:25px}.grid,.twocol,.provider-choices,.steps{grid-template-columns:1fr}.panel{padding:15px}.section-head{align-items:start;flex-direction:column}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand"><div class="logo">V</div><div><div class="eyebrow">Creator Infrastructure</div><h1>Video API Hub</h1><p>Satu tempat untuk menyambungkan model, generator, dan editor video.</p></div></div>
+    <div class="chip">LOCAL-FIRST MVP · API KEY TETAP DI SERVER</div>
+  </header>
+  <section class="hero">
+    <div class="hero-main">
+      <div class="eyebrow">One workspace · many engines</div>
+      <h2>Pilih alat terbaik untuk tiap langkah produksi video.</h2>
+      <p>Gabungkan script assistant, text-to-video, image-to-video, video editing, dan model open-source ke dalam satu alur. Mulai dari satu prompt, kirim ke satu atau beberapa provider, lalu pantau tiap job.</p>
+      <div class="pillrow"><span class="pill">Multi-provider</span><span class="pill">Job tracking</span><span class="pill">Prompt assistant</span><span class="pill">API adapters</span><span class="pill">MCP-ready architecture</span></div>
+    </div>
+    <div class="hero-side">
+      <h3>Prinsip biaya dan keamanan</h3>
+      <p>Provider tetap menagih akun/API milikmu secara langsung. Hub ini tidak menggabungkan kredit provider atau membuat layanan berbayar menjadi gratis.</p>
+      <div class="steps"><div class="step"><b>01 · Connect</b>API key di file .env server</div><div class="step"><b>02 · Compose</b>Pilih model dan aksi</div><div class="step"><b>03 · Compare</b>Submit dan pantau task</div></div>
+    </div>
+  </section>
+
+  <div class="section-head"><div><h2>Provider & bridges</h2><p>Status berikut hanya memeriksa apakah credential disetel, bukan saldo atau permission API.</p></div><button id="refreshProviders" class="softbtn">Refresh status</button></div>
+  <section id="providers" class="grid"><div class="provider"><p class="muted">Memuat connector…</p></div></section>
+
+  <div class="section-head"><div><h2>Production workspace</h2><p>Satu tugas dapat dikirim ke beberapa provider agar hasilnya bisa dibandingkan.</p></div></div>
+  <div class="columns">
+    <section class="panel">
+      <h2>Video generation / editing</h2><p class="panel-sub">Request sungguhan dapat menghabiskan kredit atau saldo provider.</p>
+      <form id="jobForm">
+        <div class="field"><label>Provider bridges</label><div class="provider-choices" id="providerChoices"></div></div>
+        <div class="field"><label>Mode</label><select id="mode"><option value="text_to_video">Text → Video</option><option value="image_to_video">Image → Video</option><option value="video_to_video">Video → Video / Edit</option></select></div>
+        <div class="field"><label>Prompt / instruksi edit</label><textarea id="prompt" required minlength="3" maxlength="6000" placeholder="Contoh: pertahankan desain karakter, buat kucing berlari ke kanan, kamera tracking samping, lighting hangat, gerakan jelas dan tidak berubah bentuk…"></textarea></div>
+        <div class="field"><label>Model ID / endpoint path</label><input id="model" placeholder="Default dari connector (contoh: gen4.5)"><div class="tiny">Higgsfield: model path katalog · Runway: model API · fal.ai: endpoint ID. Kosong = default bila ada.</div></div>
+        <div class="twocol">
+          <div class="field"><label>Durasi (detik)</label><select id="duration"><option>3</option><option selected>5</option><option>8</option><option>10</option><option>15</option><option>20</option></select></div>
+          <div class="field"><label>Aspect ratio</label><select id="ratio"><option value="16:9">16:9 landscape</option><option value="9:16">9:16 vertical</option><option value="1:1">1:1 square</option></select></div>
+        </div>
+        <div class="twocol">
+          <div class="field"><label>Resolusi</label><select id="resolution"><option>480p</option><option selected>720p</option><option>1080p</option></select></div>
+          <div class="field"><label>Generate audio (jika didukung)</label><select id="audio"><option value="false" selected>Off</option><option value="true">On</option></select></div>
+        </div>
+        <div class="field" id="imageField" hidden><label>Image URL HTTPS (harus bisa dibaca provider)</label><input id="imageUrl" type="url" placeholder="https://.../reference.png"></div>
+        <div class="field" id="videoField" hidden><label>Video URL HTTPS (harus bisa dibaca provider)</label><input id="videoUrl" type="url" placeholder="https://.../input.mp4"></div>
+        <details><summary class="muted">Advanced model options (JSON)</summary><div class="field"><label>JSON khusus provider/model</label><textarea id="options" rows="4" placeholder='{"seed": 123}'>{}</textarea><div class="tiny">Gunakan parameter yang cocok dengan docs endpoint terpilih. Parameter berbeda antar-model.</div></div></details>
+        <label class="checkline"><input type="checkbox" id="costConfirm" required><span>Saya paham request ini memakai saldo/kuota API akun yang dipilih dan biaya ditagih provider. Saya sudah memeriksa harga model.</span></label>
+        <div class="rowbtn"><button type="submit" id="submitBtn">Submit generation</button><button class="softbtn" type="button" id="clearPrompt">Clear</button></div>
+        <div id="formMessage" role="status" aria-live="polite"></div>
+      </form>
+    </section>
+
+    <section class="panel">
+      <h2>Script & prompt assistant</h2><p class="panel-sub">Memakai OpenAI API jika OPENAI_API_KEY dikonfigurasi. Biaya API terpisah dari paket ChatGPT.</p>
+      <form id="assistForm">
+        <div class="field"><label>Tugas assistant</label><select id="assistTask"><option value="prompt">Video prompt</option><option value="script">Script & dialog</option><option value="shotlist">Structured shot list</option></select></div>
+        <div class="field"><label>Brief produksi</label><textarea id="assistBrief" required minlength="3" maxlength="12000" placeholder="Ceritakan karakter, alur, durasi, target penonton, gaya visual, dan hasil yang diinginkan…"></textarea></div>
+        <div class="field"><label>Model teks (opsional)</label><input id="assistModel" placeholder="Default server env OPENAI_TEXT_MODEL"></div>
+        <button type="submit" id="assistBtn">Buat prompt / naskah</button><div id="assistMessage" role="status" aria-live="polite"></div>
+      </form>
+      <div class="resultbox"><h3>Assistant output</h3><pre id="assistOutput" style="white-space:pre-wrap;overflow-wrap:anywhere;font:13px/1.6 inherit;color:#dce5f5;margin:0">Hasil akan muncul di sini.</pre><div class="rowbtn" style="margin-top:12px"><button type="button" class="softbtn" id="usePrompt">Pakai sebagai prompt video</button><button type="button" class="softbtn" id="copyAssistant">Copy text</button></div></div>
+    </section>
+  </div>
+
+  <div class="section-head"><div><h2>Job monitor</h2><p>Job tersimpan di SQLite lokal. Periksa status untuk melihat output URL setelah provider selesai.</p></div><button id="refreshJobs" class="softbtn">Refresh jobs</button></div>
+  <section id="jobs" class="jobs"><div class="job"><p class="muted">Belum ada job tersimpan.</p></div></section>
+  <div class="footer">Video API Hub · MVP lokal. Jangan expose ke internet publik sebelum menambahkan login, enkripsi secret, limit biaya, rate limit, dan kepemilikan job per user.</div>
+</div>
+<script>
+const $ = (id) => document.getElementById(id);
+let providerData = [];
+let assistantText = "";
+const ICON = {higgsfield:"H",runway:"R",fal:"f",openai:"◎",comfyui:"C"};
+function esc(value){return String(value ?? "").replace(/[&<>"']/g, ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));}
+function message(target,text,type=""){ $(target).innerHTML = text ? '<div class="msg '+type+'">'+esc(text)+'</div>' : ""; }
+async function request(url,opts={}){const res=await fetch(url,{...opts,headers:{"Content-Type":"application/json",...(opts.headers||{})}});const data=await res.json().catch(()=>({detail:"Respons server bukan JSON"}));if(!res.ok)throw new Error(data.detail||data.error||("HTTP "+res.status));return data;}
+async function loadProviders(){
+  try{
+    const data=await request("/api/providers");providerData=data.providers;
+    $("providers").innerHTML=providerData.map(p=>'<article class="provider"><div class="provider-top"><div class="provider-icon">'+ICON[p.id]+'</div><div><h3>'+esc(p.name)+'</h3><div class="tiny">'+esc(p.kind)+'</div></div></div><p class="desc">'+esc(p.description)+'</p><span class="state '+(p.configured?"ready":"")+'">'+(p.configured?"Credential found":"Needs setup")+'</span><div class="provider-foot"><span class="tiny">'+esc(p.capabilities.join(" · "))+'</span><a href="'+esc(p.docs)+'" target="_blank" rel="noopener">Docs ↗</a></div></article>').join("");
+    $("providerChoices").innerHTML=providerData.filter(p=>["higgsfield","runway","fal"].includes(p.id)).map(p=>'<label class="choice"><input type="checkbox" name="provider" value="'+p.id+'" '+(p.id==="higgsfield"||p.id==="runway"?"checked":"")+'><span><b>'+esc(p.name)+'</b><small>'+(p.configured?"Key detected":"Key missing")+'</small></span></label>').join("");
+    await loadJobs();
+  }catch(e){$("providers").innerHTML='<div class="msg error">'+esc(e.message)+'</div>';}
+}
+function jobCard(j){
+  const output = j.output_url ? '<a class="output" target="_blank" rel="noopener" href="'+esc(j.output_url)+'">Open output ↗</a>' : "";
+  const error = j.error ? '<p class="msg error">'+esc(j.error)+'</p>' : "";
+  const poll = !["completed","failed"].includes(j.status) ? '<button class="softbtn" data-poll="'+esc(j.id)+'">Check status</button>' : "";
+  return '<article class="job"><div class="job-header"><div><h3>'+esc(j.provider)+' · '+esc(j.mode)+'</h3><p>'+esc(j.model||"default model")+' · '+esc(j.created_at)+'</p></div><span class="status '+esc(j.status)+'">'+esc(j.status)+'</span></div><p>'+esc(j.prompt)+'</p>'+error+output+'<div class="rowbtn" style="margin-top:9px">'+poll+'</div></article>';
+}
+async function loadJobs(){
+  try{const d=await request("/api/jobs");$("jobs").innerHTML=d.jobs.length?d.jobs.map(jobCard).join(""):'<div class="job"><p class="muted">Belum ada job. Submit tugas pertama di atas.</p></div>';}
+  catch(e){$("jobs").innerHTML='<div class="msg error">'+esc(e.message)+'</div>';}
+}
+$("refreshProviders").addEventListener("click",loadProviders);
+$("refreshJobs").addEventListener("click",loadJobs);
+$("mode").addEventListener("change",()=>{
+  $("imageField").hidden=$("mode").value!=="image_to_video";
+  $("videoField").hidden=$("mode").value!=="video_to_video";
+});
+$("clearPrompt").addEventListener("click",()=>{$("prompt").value="";message("formMessage","");});
+$("jobForm").addEventListener("submit",async (e)=>{
+  e.preventDefault();message("formMessage","");
+  const providers=Array.from(document.querySelectorAll('input[name="provider"]:checked')).map(el=>el.value);
+  if(!providers.length){message("formMessage","Pilih setidaknya satu video provider.","error");return;}
+  let options;try{options=JSON.parse($("options").value||"{}");if(!options||Array.isArray(options)||typeof options!=="object")throw new Error("Options harus JSON object");}
+  catch(err){message("formMessage","Advanced options JSON tidak valid: "+err.message,"error");return;}
+  const body={providers,mode:$("mode").value,prompt:$("prompt").value,model:$("model").value||null,
+    duration:Number($("duration").value),aspect_ratio:$("ratio").value,resolution:$("resolution").value,
+    generate_audio:$("audio").value==="true",image_url:$("imageUrl").value||null,video_url:$("videoUrl").value||null,
+    options,confirm_possible_cost:$("costConfirm").checked};
+  $("submitBtn").disabled=true;$("submitBtn").textContent="Submitting…";
+  try{const d=await request("/api/jobs",{method:"POST",body:JSON.stringify(body)});const failed=d.jobs.filter(j=>j.status==="failed").length;message("formMessage","Tercatat "+d.jobs.length+" job; "+failed+" langsung gagal. Periksa Job Monitor.","success");await loadJobs();d.jobs.filter(j=>!["failed","completed"].includes(j.status)).forEach(j=>pollUntilDone(j.id));}
+  catch(err){message("formMessage",err.message,"error");}
+  finally{$("submitBtn").disabled=false;$("submitBtn").textContent="Submit generation";}
+});
+async function checkJob(id){const d=await request("/api/jobs/"+encodeURIComponent(id));await loadJobs();return d.job;}
+async function pollUntilDone(id){for(let i=0;i<120;i++){await new Promise(r=>setTimeout(r,6000));try{const j=await checkJob(id);if(["completed","failed"].includes(j.status))return;}catch(e){return;}}}
+$("jobs").addEventListener("click",async (e)=>{
+  const btn=e.target.closest("[data-poll]");if(!btn)return;
+  btn.disabled=true;btn.textContent="Checking…";
+  try{const j=await checkJob(btn.dataset.poll);message("formMessage",j.status==="completed"?"Job selesai.":"Status: "+j.status+(j.poll_error?" · "+j.poll_error:""),j.status==="failed"?"error":"success");}
+  catch(err){message("formMessage",err.message,"error");}
+  finally{await loadJobs();}
+});
+$("assistForm").addEventListener("submit",async (e)=>{
+  e.preventDefault();message("assistMessage","");$("assistBtn").disabled=true;$("assistBtn").textContent="Working…";
+  try{const d=await request("/api/assist",{method:"POST",body:JSON.stringify({task:$("assistTask").value,brief:$("assistBrief").value,model:$("assistModel").value||null})});assistantText=d.text;$("assistOutput").textContent=d.text;message("assistMessage","Selesai lewat OpenAI API · "+d.model,"success");}
+  catch(err){message("assistMessage",err.message,"error");}
+  finally{$("assistBtn").disabled=false;$("assistBtn").textContent="Buat prompt / naskah";}
+});
+$("usePrompt").addEventListener("click",()=>{if(assistantText){$("prompt").value=assistantText;$("prompt").focus();}});
+$("copyAssistant").addEventListener("click",async ()=>{if(!assistantText)return;try{await navigator.clipboard.writeText(assistantText);message("assistMessage","Teks disalin.","success");}catch(e){message("assistMessage","Clipboard tidak tersedia. Pilih teks hasil dan salin manual.","error");}});
+loadProviders();
+</script>
+</body></html>
