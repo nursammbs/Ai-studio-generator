@@ -1,125 +1,456 @@
 from __future__ import annotations
 
+import hashlib
 import json
-import tempfile
-import uuid
+import os
+import re
+import shutil
+import time
 import zipfile
 from pathlib import Path
 
 import streamlit as st
 
-from core import Candidate, extract_audio, probe_media, render_clip, save_transcript, suggest_candidates, transcribe, write_srt
+from core import (
+    Candidate,
+    SUPPORTED_VIDEO_SUFFIXES,
+    extract_audio,
+    load_transcript,
+    render_clip,
+    save_transcript,
+    suggest_candidates,
+    transcribe,
+    transcript_excerpt,
+    validate_rendered_clip,
+    validate_video,
+    write_srt,
+)
+from jobs import JobStore
+
 
 ROOT = Path(__file__).resolve().parent
 WORK = ROOT / "outputs"
-WORK.mkdir(exist_ok=True)
+STORE = JobStore(WORK)
+MAX_UPLOAD_BYTES = int(os.environ.get("CLIPPER_MAX_UPLOAD_BYTES", str(2 * 1024**3)))
+MAX_SOURCE_SECONDS = int(os.environ.get("CLIPPER_MAX_SOURCE_SECONDS", str(4 * 60 * 60)))
+
+
+def job_dir(job: dict) -> Path:
+    return WORK / job["id"]
+
+
+def source_path(job: dict) -> Path:
+    return Path(job["source_path"])
+
+
+def run_analysis(job: dict, model_size: str, min_seconds: int, max_seconds: int, max_clips: int) -> dict:
+    directory = job_dir(job)
+    source = source_path(job)
+    started = time.perf_counter()
+    job.update(status="analyzing", stage="media_validation", error=None, model_size=model_size)
+    STORE.save(job)
+
+    media = validate_video(source, MAX_SOURCE_SECONDS)
+    job["media"] = media
+    job["metrics"].update({
+        "source_duration_seconds": round(media["duration"], 3),
+        "source_size_bytes": source.stat().st_size,
+    })
+    job["stage"] = "audio_extraction"
+    STORE.save(job)
+
+    audio = extract_audio(source, directory / "audio.wav")
+    job["stage"] = "transcription"
+    STORE.save(job)
+    words = transcribe(audio, model_size=model_size, device="cpu")
+    if not words:
+        raise ValueError("No timestamped words were returned. Check the audio or try a larger Whisper model.")
+
+    transcript_file = save_transcript(words, directory / "transcript.json")
+    job["transcript_path"] = str(transcript_file)
+    job["stage"] = "candidate_selection"
+    STORE.save(job)
+    candidates = suggest_candidates(words, min_seconds, max_seconds, max_clips)
+    if not candidates:
+        raise ValueError("No complete transcript segments matched the selected duration range.")
+    job["candidates"] = [candidate.__dict__ for candidate in candidates]
+    job["status"] = "ready_for_review"
+    job["stage"] = "review"
+    job["error"] = None
+    job["metrics"]["analysis_seconds"] = round(time.perf_counter() - started, 2)
+    STORE.save(job)
+    return job
+
+
+def _safe_stem(text: str, fallback: str) -> str:
+    value = re.sub(r"[^A-Za-z0-9]+", "-", text).strip("-").lower()[:48]
+    return value or fallback
+
+
+def render_batch(
+    job: dict, selected: list[dict], caption_font_size: int,
+    caption_margin_v: int, framing: str,
+) -> tuple[dict, Path]:
+    directory = job_dir(job)
+    settings = {
+        "caption_font_size": caption_font_size,
+        "caption_margin_v": caption_margin_v,
+        "framing": framing,
+    }
+    fingerprint_source = json.dumps(
+        {"clips": selected, "settings": settings},
+        sort_keys=True, ensure_ascii=False, separators=(",", ":"),
+    )
+    fingerprint = hashlib.sha256(fingerprint_source.encode("utf-8")).hexdigest()[:12]
+    batch_dir = directory / "renders" / fingerprint
+    batch_dir.mkdir(parents=True, exist_ok=True)
+
+    previous = job.get("rendered", []) if job.get("render_batch_fingerprint") == fingerprint else []
+    rendered_by_index = {int(item["index"]): item for item in previous if "index" in item}
+    job.update(
+        status="rendering", stage="render", error=None,
+        render_batch_fingerprint=fingerprint,
+        selected_clips=selected,
+        caption_settings=settings,
+        rendered=previous,
+    )
+    STORE.save(job)
+    started = time.perf_counter()
+    progress = st.progress(0.0, text="Preparing clips")
+    transcript_words = load_transcript(job["transcript_path"])
+
+    for index, item in enumerate(selected, 1):
+        title = item["title"]
+        stem = _safe_stem(title, f"clip-{index:02d}")
+        output = batch_dir / f"{index:02d}-{stem}.mp4"
+        subtitle = output.with_suffix(".srt")
+        expected_duration = float(item["end"]) - float(item["start"])
+        existing = rendered_by_index.get(index)
+        if (
+            existing
+            and Path(existing.get("path", "")).is_file()
+            and Path(existing.get("subtitle_path", "")).is_file()
+        ):
+            try:
+                validate_rendered_clip(existing["path"], expected_duration)
+                progress.progress(index / len(selected), text=f"Reused clip {index}/{len(selected)}")
+                continue
+            except (OSError, RuntimeError, ValueError):
+                pass
+
+        write_srt(transcript_words, float(item["start"]), float(item["end"]), subtitle)
+        candidate = Candidate(
+            start=float(item["start"]), end=float(item["end"]),
+            text=transcript_excerpt(transcript_words, float(item["start"]), float(item["end"])),
+            score=float(item.get("score", 0)), reasons=list(item.get("reasons", [])),
+        )
+        output = render_clip(
+            source_path(job), candidate, subtitle, output,
+            caption_font_size=caption_font_size,
+            caption_margin_v=caption_margin_v,
+            framing=framing,
+        )
+        media = validate_rendered_clip(output, expected_duration)
+        record = {
+            "index": index,
+            "title": title,
+            "path": str(output),
+            "subtitle_path": str(subtitle),
+            "start": candidate.start,
+            "end": candidate.end,
+            "score": candidate.score,
+            "reasons": candidate.reasons,
+            "duration": media["duration"],
+        }
+        rendered_by_index[index] = record
+        job["rendered"] = list(rendered_by_index.values())
+        job["stage"] = f"rendered_{index}_of_{len(selected)}"
+        STORE.save(job)
+        progress.progress(index / len(selected), text=f"Rendered {index}/{len(selected)}")
+
+    rendered = [rendered_by_index[index] for index in range(1, len(selected) + 1)]
+    source_hours = max(float(job["media"]["duration"]) / 3600, 1 / 3600)
+    analysis_seconds = float(job["metrics"].get("analysis_seconds") or 0)
+    render_seconds = round(time.perf_counter() - started, 2)
+    selection_rate = len(selected) / max(len(job.get("candidates", [])), 1)
+    job["metrics"].update({
+        "candidate_count": len(job.get("candidates", [])),
+        "exported_clip_count": len(selected),
+        "export_selection_rate": round(selection_rate, 4),
+        "processing_seconds_per_source_hour": round((analysis_seconds + render_seconds) / source_hours, 2),
+    })
+    report = {
+        "job_id": job["id"],
+        "source_name": job["source_name"],
+        "model": job["model_size"],
+        "source_duration_seconds": job["media"]["duration"],
+        "analysis_seconds": analysis_seconds,
+        "render_seconds": render_seconds,
+        "export_selection_rate": job["metrics"]["export_selection_rate"],
+        "processing_seconds_per_source_hour": job["metrics"]["processing_seconds_per_source_hour"],
+        "caption_settings": settings,
+        "framing": framing,
+        "clips": [
+            {key: record[key] for key in ("title", "start", "end", "score", "reasons", "duration")}
+            for record in rendered
+        ],
+    }
+    report_path = batch_dir / "processing-report.json"
+    report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    archive_path = batch_dir / "clips-export.zip"
+    with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as archive:
+        for record in rendered:
+            archive.write(record["path"], Path(record["path"]).name)
+            archive.write(record["subtitle_path"], Path(record["subtitle_path"]).name)
+        archive.write(job["transcript_path"], "transcript.json")
+        archive.write(report_path, report_path.name)
+
+    job["rendered"] = rendered
+    job["status"] = "complete"
+    job["stage"] = "complete"
+    job["error"] = None
+    job["metrics"]["render_seconds"] = report["render_seconds"]
+    STORE.save(job)
+    return job, archive_path
+
 
 st.set_page_config(page_title="Local Clipper", page_icon="✂️", layout="wide")
+st.markdown(
+    "<style>.block-container{max-width:1320px;padding-top:2rem}.stCaption{opacity:.78}</style>",
+    unsafe_allow_html=True,
+)
 st.title("Local Clipper")
-st.caption("Long recording → transcript → explainable clip suggestions → reviewed vertical MP4 exports.")
-st.warning("Experimental MVP. Review every clip and caption. Candidate scores are heuristic ranking aids, not predictions of virality or income.")
+st.caption("Turn an authorized long recording into reviewed, captioned vertical clips.")
+st.info("Local experimental MVP. Transcript selection is heuristic; review every clip and caption before publishing.")
 
 with st.sidebar:
     st.header("Processing")
     model_size = st.selectbox("Whisper model", ["base", "small", "medium"], index=0)
-    st.caption("CPU / int8 mode. Larger models need more RAM and run slower on CPU.")
-    min_seconds = st.slider("Minimum clip duration (seconds)", 15, 45, 25)
-    max_seconds = st.slider("Maximum clip duration (seconds)", 30, 90, 60)
+    min_seconds = st.slider("Suggested clip minimum", 15, 45, 25)
+    max_seconds = st.slider("Suggested clip maximum", 30, 90, 60)
     max_clips = st.slider("Maximum suggestions", 3, 20, 10)
+    caption_font_size = st.slider("Caption size", 32, 62, 46)
+    caption_position = st.selectbox("Caption position", ["Lower", "Middle", "Higher"], index=0)
+    caption_margin_v = {"Lower": 160, "Middle": 250, "Higher": 360}[caption_position]
+    framing_label = st.selectbox("Vertical framing", ["Center crop", "Fit with black bars"], index=0)
+    framing = "center_crop" if framing_label == "Center crop" else "fit"
+    st.caption("Transcription uses CPU / int8. Model speed and memory use depend on your computer.")
 
-uploaded = st.file_uploader("Upload a video you own or are authorized to process", type=["mp4", "mov", "mkv", "webm", "m4v"])
-if uploaded is not None:
-    if st.button("Analyze video", type="primary", use_container_width=True):
-        job_id = uuid.uuid4().hex[:12]
-        job_dir = WORK / job_id
-        job_dir.mkdir(parents=True, exist_ok=True)
-        source = job_dir / Path(uploaded.name).name
-        source.write_bytes(uploaded.getvalue())
+    saved_jobs = STORE.list()
+    if saved_jobs:
+        labels = {
+            item["id"]: f"{item.get('source_name', 'Video')} · {item.get('status', 'unknown')} · {item['id']}"
+            for item in saved_jobs
+        }
+        ids = [item["id"] for item in saved_jobs]
+        current_id = st.session_state.get("clipper_job_id")
+        default_index = ids.index(current_id) if current_id in ids else 0
+        selected_id = st.selectbox(
+            "Saved jobs", ids, index=default_index, format_func=lambda value: labels[value],
+            key="clipper_saved_job_selector",
+        )
+        if st.button("Open saved job", use_container_width=True):
+            st.session_state["clipper_job_id"] = selected_id
+
+uploaded = st.file_uploader(
+    "Upload a video you own or are authorized to process",
+    type=sorted(suffix.lstrip(".") for suffix in SUPPORTED_VIDEO_SUFFIXES),
+    help=f"Maximum {MAX_UPLOAD_BYTES / 1024**3:.1f} GB and {MAX_SOURCE_SECONDS / 3600:g} hours.",
+)
+
+if uploaded is not None and st.button("Analyze video", type="primary", use_container_width=True):
+    suffix = Path(uploaded.name).suffix.lower()
+    if suffix not in SUPPORTED_VIDEO_SUFFIXES:
+        st.error("This file extension is not supported.")
+    elif uploaded.size > MAX_UPLOAD_BYTES:
+        st.error(f"This upload exceeds the {MAX_UPLOAD_BYTES / 1024**3:.1f} GB local limit.")
+    else:
+        job = STORE.create(uploaded.name, WORK / "pending")
+        target = job_dir(job) / f"source{suffix}"
         try:
-            with st.status("Inspecting media and preparing transcript…", expanded=True) as status:
-                media = probe_media(source)
-                if not media["has_video"]:
-                    raise ValueError("The uploaded file has no video stream.")
-                st.write(f"Duration: {media['duration']:.1f}s")
-                audio = extract_audio(source, job_dir / "audio.wav")
-                st.write("Transcribing locally with faster-whisper…")
-                words = transcribe(audio, model_size=model_size, device="cpu")
-                if not words:
-                    raise ValueError("No timestamped words were returned. Try another model or check the audio.")
-                save_transcript(words, job_dir / "transcript.json")
-                candidates = suggest_candidates(words, min_seconds, max_seconds, max_clips)
-                if not candidates:
-                    raise ValueError("No candidate segments matched the selected duration range.")
-                (job_dir / "media.json").write_text(json.dumps(media, indent=2), encoding="utf-8")
-                st.session_state["clipper_job"] = {
-                    "id": job_id, "dir": str(job_dir), "source": str(source),
-                    "words": [w.__dict__ for w in words],
-                    "candidates": [c.__dict__ for c in candidates],
-                }
-                status.update(label=f"Analysis complete — {len(candidates)} suggestions", state="complete")
+            uploaded.seek(0)
+            with target.open("wb") as destination:
+                shutil.copyfileobj(uploaded, destination, length=1024 * 1024)
+            job["source_path"] = str(target.resolve())
+            job["status"] = "uploaded"
+            STORE.save(job)
+            st.session_state["clipper_job_id"] = job["id"]
+            with st.status("Analyzing the recording…", expanded=True) as status:
+                status.write("Checking format, audio/video streams and duration")
+                job = run_analysis(job, model_size, min_seconds, max_seconds, max_clips)
+                status.update(label="Transcript and clip suggestions are ready", state="complete")
+            st.success(f"Analysis complete: {len(job['candidates'])} suggestions.")
         except Exception as exc:
+            job["status"] = "failed"
+            job["error"] = str(exc)[:1600]
+            job["stage"] = job.get("stage", "analysis")
+            STORE.save(job)
             st.error(f"Analysis failed: {exc}")
-            st.info("Check FFmpeg/ffprobe, available RAM/disk space, and the selected Whisper model.")
+            st.caption("The uploaded file and job state are saved locally. Open the saved job to retry analysis.")
 
-job = st.session_state.get("clipper_job")
-if job:
-    from core import Word
-    st.subheader("Review suggested clips")
-    st.caption("Select clips and edit start/end times. Listen to each result before publishing.")
-    rows = []
-    for index, item in enumerate(job["candidates"]):
-        rows.append({
-            "Export": index < 5,
-            "Start (s)": float(item["start"]),
-            "End (s)": float(item["end"]),
-            "Score": float(item["score"]),
-            "Reason": "; ".join(item["reasons"]),
-            "Transcript": item["text"][:500],
-        })
-    edited = st.data_editor(
-        rows, hide_index=True, use_container_width=True,
-        column_config={
-            "Export": st.column_config.CheckboxColumn("Export", default=False),
-            "Start (s)": st.column_config.NumberColumn("Start (s)", min_value=0.0, format="%.2f"),
-            "End (s)": st.column_config.NumberColumn("End (s)", min_value=0.1, format="%.2f"),
-            "Score": st.column_config.NumberColumn("Heuristic score", disabled=True, format="%.1f"),
-            "Reason": st.column_config.TextColumn("Why suggested", disabled=True, width="large"),
-            "Transcript": st.column_config.TextColumn("Transcript excerpt", disabled=True, width="large"),
-        },
-        key=f"clip_editor_{job['id']}",
-    )
-    if st.button("Render selected clips", type="primary"):
-        selected = [row for row in edited if row.get("Export")]
-        if not selected:
-            st.error("Select at least one clip.")
-        else:
-            job_dir = Path(job["dir"])
-            words = [Word(**item) for item in job["words"]]
-            rendered = []
-            progress = st.progress(0.0)
+active_id = st.session_state.get("clipper_job_id")
+active_job = None
+if active_id:
+    try:
+        active_job = STORE.load(active_id)
+    except (OSError, ValueError) as exc:
+        st.error(f"Could not open saved job: {exc}")
+
+if active_job:
+    job = active_job
+    st.divider()
+    st.subheader(job.get("source_name", "Saved video"))
+    st.caption(f"Job {job['id']} · Status: {job['status'].replace('_', ' ').title()}")
+
+    if job["status"] == "failed" and job.get("stage") == "render" and job.get("selected_clips"):
+        st.warning(job.get("error") or "The last render step failed.")
+        if st.button("Retry failed render", type="primary"):
             try:
-                for index, row in enumerate(selected, 1):
-                    start, end = float(row["Start (s)"]), float(row["End (s)"])
-                    if start < 0 or end <= start:
-                        raise ValueError("Each clip needs a valid start/end range.")
-                    candidate = Candidate(start, end, str(row["Transcript"]), float(row["Score"]), [])
-                    subtitle = write_srt(words, start, end, job_dir / f"clip_{index:02d}.srt")
-                    output = render_clip(job["source"], candidate, subtitle, job_dir / f"clip_{index:02d}.mp4")
-                    rendered.append(output)
-                    progress.progress(index / len(selected), text=f"Rendered {index}/{len(selected)}")
-                bundle = job_dir / "clips-export.zip"
-                with zipfile.ZipFile(bundle, "w", zipfile.ZIP_DEFLATED) as archive:
-                    for output in rendered:
-                        archive.write(output, output.name)
-                        archive.write(output.with_suffix(".srt"), output.with_suffix(".srt").name)
-                    archive.write(job_dir / "transcript.json", "transcript.json")
-                st.session_state["clipper_export"] = str(bundle)
-                st.success(f"Rendered {len(rendered)} clips.")
+                job, archive = render_batch(
+                    job, job["selected_clips"], caption_font_size, caption_margin_v, framing,
+                )
+                st.session_state["clipper_export"] = str(archive)
+                st.success(f"Rendered and validated {len(job['rendered'])} clips.")
             except Exception as exc:
-                st.error(f"Render failed: {exc}")
+                job.update(status="failed", stage="render", error=str(exc)[:1600])
+                STORE.save(job)
+                st.error(f"Render retry failed: {exc}")
 
-export_path = st.session_state.get("clipper_export")
-if export_path and Path(export_path).is_file():
-    st.download_button("Download clips + subtitles (ZIP)", Path(export_path).read_bytes(),
-                       file_name="local-clipper-export.zip", mime="application/zip",
-                       use_container_width=True)
+    elif job["status"] == "failed":
+        st.warning(job.get("error") or "The last step failed.")
+        if st.button("Retry analysis", type="primary"):
+            try:
+                with st.status("Retrying analysis…", expanded=True) as status:
+                    job = run_analysis(job, model_size, min_seconds, max_seconds, max_clips)
+                    status.update(label="Analysis complete", state="complete")
+                st.rerun()
+            except Exception as exc:
+                job.update(status="failed", error=str(exc)[:1600])
+                STORE.save(job)
+                st.error(f"Retry failed: {exc}")
+
+    if job.get("media") and Path(job.get("source_path", "")).is_file():
+        with st.expander("Source video preview", expanded=False):
+            st.video(job["source_path"])
+            st.caption(f"{job['media']['duration']:.1f}s · {job['media'].get('format_name', 'video')}")
+
+    if job.get("candidates") and job.get("transcript_path") and Path(job["transcript_path"]).is_file():
+        st.subheader("Review suggested clips")
+        st.caption("Edit the start and end times, rename clips, and select the clips to export.")
+        rows = []
+        resume_clips = (
+            job.get("selected_clips")
+            if job.get("selected_clips") and (
+                job.get("status") == "complete"
+                or job.get("stage", "").startswith("render")
+            )
+            else None
+        )
+        if resume_clips:
+            for item in resume_clips:
+                rows.append({
+                    "Export": True, "Title": item["title"],
+                    "Start (s)": float(item["start"]), "End (s)": float(item["end"]),
+                    "Score": float(item.get("score", 0)),
+                    "Why suggested": "; ".join(item.get("reasons", [])),
+                    "Transcript excerpt": transcript_excerpt(
+                        load_transcript(job["transcript_path"]), float(item["start"]), float(item["end"]),
+                    )[:360],
+                })
+        for index, item in enumerate(job["candidates"]):
+            if resume_clips and any(abs(float(saved["start"]) - float(item["start"])) < 0.01 for saved in resume_clips):
+                continue
+            rows.append({
+                "Export": not resume_clips and index < 5,
+                "Title": f"Clip {index + 1:02d}",
+                "Start (s)": float(item["start"]),
+                "End (s)": float(item["end"]),
+                "Score": float(item["score"]),
+                "Why suggested": "; ".join(item["reasons"]),
+                "Transcript excerpt": item["text"][:360],
+            })
+        edited = st.data_editor(
+            rows, hide_index=True, use_container_width=True,
+            column_config={
+                "Export": st.column_config.CheckboxColumn("Export", default=False),
+                "Title": st.column_config.TextColumn("Clip title", max_chars=64),
+                "Start (s)": st.column_config.NumberColumn("Start (s)", min_value=0.0, format="%.2f"),
+                "End (s)": st.column_config.NumberColumn("End (s)", min_value=0.1, format="%.2f"),
+                "Score": st.column_config.NumberColumn("Heuristic score", disabled=True, format="%.1f"),
+                "Why suggested": st.column_config.TextColumn(disabled=True, width="large"),
+                "Transcript excerpt": st.column_config.TextColumn(disabled=True, width="large"),
+            },
+            key=f"clip_editor_{job['id']}",
+        )
+
+        if st.button("Render selected clips", type="primary"):
+            selected: list[dict] = []
+            duration = float(job["media"]["duration"])
+            errors: list[str] = []
+            for row in edited:
+                if not row.get("Export"):
+                    continue
+                start, end = float(row["Start (s)"]), float(row["End (s)"])
+                title = str(row.get("Title", "")).strip() or f"Clip {len(selected) + 1:02d}"
+                if start < 0 or end <= start or end > duration + 0.05:
+                    errors.append(f"{title}: choose a valid range within the source video.")
+                elif end - start < 5:
+                    errors.append(f"{title}: clips must be at least 5 seconds long.")
+                else:
+                    selected.append({
+                        "title": title,
+                        "start": round(start, 3),
+                        "end": round(end, 3),
+                        "score": float(row["Score"]),
+                        "reasons": next((item["reasons"] for item in job["candidates"]
+                                         if abs(float(item["start"]) - start) < 0.01), []),
+                    })
+            if errors:
+                for message in errors:
+                    st.error(message)
+            elif not selected:
+                st.error("Select at least one clip to render.")
+            elif len({item["title"].casefold() for item in selected}) != len(selected):
+                st.error("Clip titles must be unique within one export batch.")
+            else:
+                try:
+                    job, archive = render_batch(
+                        job, selected, caption_font_size, caption_margin_v, framing,
+                    )
+                    st.session_state["clipper_export"] = str(archive)
+                    st.success(f"Rendered and validated {len(job['rendered'])} clips.")
+                except Exception as exc:
+                    job.update(status="failed", stage="render", error=str(exc)[:1600])
+                    STORE.save(job)
+                    st.error(f"Rendering failed: {exc}")
+                    st.caption("Completed clips are retained locally. Reopen the job and retry after fixing the issue.")
+
+    export = st.session_state.get("clipper_export")
+    if job.get("render_batch_fingerprint"):
+        export = str(job_dir(job) / "renders" / job["render_batch_fingerprint"] / "clips-export.zip")
+        if Path(export).is_file():
+            st.download_button(
+                "Download clips, subtitles and processing report",
+                Path(export).read_bytes(), file_name=f"{job['id']}-clips.zip",
+                mime="application/zip", use_container_width=True,
+            )
+
+    if job.get("rendered"):
+        with st.expander("Rendered clip previews", expanded=job.get("status") == "complete"):
+            for record in job["rendered"]:
+                path = Path(record["path"])
+                if path.is_file():
+                    st.markdown(f"**{record['title']}** · {record['start']:.1f}–{record['end']:.1f}s")
+                    st.video(str(path))
+        if job.get("metrics"):
+            metrics = job["metrics"]
+            cols = st.columns(4)
+            if metrics.get("analysis_seconds") is not None:
+                cols[0].metric("Analysis time", f"{metrics['analysis_seconds']:.1f}s")
+            if metrics.get("render_seconds") is not None:
+                cols[1].metric("Render time", f"{metrics['render_seconds']:.1f}s")
+            if metrics.get("source_duration_seconds") is not None:
+                cols[2].metric("Source duration", f"{metrics['source_duration_seconds'] / 60:.1f} min")
+            if metrics.get("export_selection_rate") is not None:
+                cols[3].metric("Suggestions exported", f"{metrics['export_selection_rate']:.0%}")
+
