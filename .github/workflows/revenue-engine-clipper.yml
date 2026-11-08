@@ -1,4 +1,4 @@
-name: Revenue Engine Clipper Tests
+name: Revenue Engine Clipper CI
 
 on:
   push:
@@ -19,6 +19,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Run pure Python unit tests
+      - name: Install FFmpeg for the media smoke test
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes ffmpeg
+      - name: Run unit and MP4 smoke tests
         working-directory: revenue-engine/clipper
         run: python -m unittest discover -s tests -v
