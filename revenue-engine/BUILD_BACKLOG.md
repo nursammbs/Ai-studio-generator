@@ -1,52 +1,36 @@
 # Build Backlog — Long-Form Video Repurposing MVP
 
-Branch: `feature/revenue-engine-2027-foundation`
+Branch: feature/revenue-engine-2027-foundation
 
-## Milestone 0 — Foundation (current)
+## Milestone 0 — Foundation
 - [x] Create isolated development branch.
 - [x] Record product decision and scope.
 - [x] Audit existing video, API hub and agent foundations.
-- [ ] Add reproducible test workflow and dependency lock strategy.
+- [x] Add first media-processing core (probe, audio extraction, transcription adapter, candidate windows, SRT and vertical render).
+- [x] Add pure-Python unit tests and GitHub Actions workflow.
+- [ ] Verify CI result and fix any failures.
 
-## Milestone 1 — Media ingestion and transcript
-- [ ] Create `clipper/` package separate from slideshow engine.
-- [ ] Validate input video with ffprobe; record duration, streams, frame size and audio presence.
-- [ ] Extract mono 16 kHz WAV via FFmpeg.
-- [ ] Add transcription adapter contract.
-- [ ] Implement CPU-first faster-whisper adapter with configurable model size and cache directory.
-- [ ] Save transcript segments and word timestamps in normalized JSON.
-- [ ] Handle missing audio, corrupt media, unsupported codec, long files and cancellation.
+## Milestone 1 — Usable local workflow
+- [ ] Streamlit upload/import page for local video files.
+- [ ] Run ffprobe validation and show media metadata.
+- [ ] Transcribe and persist word timestamps.
+- [ ] Show explainable candidate list with transcript excerpts.
+- [ ] Human approve/reject and trim controls.
+- [ ] Render selected clips and provide ZIP download.
+- [ ] Add progress, cancellation, retry and resumable job state.
 
-## Milestone 2 — Candidate clip detection
-- [ ] Build deterministic candidate windows from transcript sentence/paragraph boundaries.
-- [ ] Enforce configurable duration range (default 25–60 seconds).
-- [ ] Rank candidates using topic continuity, complete thought, opening hook, speech density and ending completeness.
-- [ ] Store reasons and transcript excerpts; never expose a fake "virality score".
-- [ ] Add overlap suppression and duplicate detection.
-- [ ] Keep human selection as mandatory.
+## Milestone 2 — Quality
+- [ ] Boundary snapping and overlap suppression tests.
+- [ ] Caption wrapping, safe-area preview and ASS styling.
+- [ ] Optional face tracking after baseline center crop works.
+- [ ] Benchmark CPU throughput and memory on real target hardware.
+- [ ] Add consented sample fixtures and end-to-end smoke tests.
 
-## Milestone 3 — Captioned rendering
-- [ ] Generate editable SRT and ASS subtitles.
-- [ ] Escape ASS text safely and wrap long captions.
-- [ ] Render 9:16 crop with safe margins; initial crop is center crop, not claimed face tracking.
-- [ ] Add optional landscape 16:9 export.
-- [ ] Validate output with ffprobe and verify expected duration/audio.
-- [ ] Generate preview contact sheet and metadata JSON.
-
-## Milestone 4 — Review UI and resumability
-- [ ] Streamlit upload/import page.
-- [ ] Transcript view and candidate list.
-- [ ] Approve/reject/trim candidate boundaries.
-- [ ] Caption style and export settings.
-- [ ] SQLite job state, processing logs, retry/resume.
-- [ ] Download all accepted clips as ZIP.
-
-## Milestone 5 — Pilot and commercial decision
-- [ ] Prepare rights-cleared sample dataset.
-- [ ] Test on at least 5 target users.
-- [ ] Track acceptance, edit time, processing time and cost per source hour.
-- [ ] Obtain paid pilot commitments before building billing.
+## Milestone 3 — Pilot and commercial decision
+- [ ] Test with 5 target English-language creators/podcasters.
+- [ ] Measure clip acceptance, edit time, processing time and cost per source hour.
+- [ ] Obtain paid pilot commitments before billing or public SaaS.
 - [ ] Decide desktop, hosted SaaS, or managed service based on measured demand.
 
-## Definition of done for MVP
-A user can import an authorized local video, receive a transcript and explainable clip suggestions, adjust each segment, render valid 9:16 MP4 clips with synchronized captions, and download a resumable export bundle without requiring a paid video-generation API.
+## MVP definition of done
+A user imports an authorized local video, receives a transcript and explainable clip suggestions, adjusts segment boundaries, renders valid 9:16 MP4 clips with synchronized captions, and downloads the outputs without a paid video-generation API.
