@@ -14,15 +14,23 @@ on:
 jobs:
   unit-tests:
     runs-on: ubuntu-latest
+    env:
+      RUN_VIDEO_E2E: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Install FFmpeg for the media smoke test
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface/hub
+          key: faster-whisper-base-ubuntu-latest
+      - name: Install media tools and Python dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes ffmpeg
-      - name: Run unit and MP4 smoke tests
+          sudo apt-get install --yes ffmpeg espeak-ng
+          python -m pip install --upgrade pip
+          python -m pip install -r revenue-engine/clipper/requirements-clipper.txt
+      - name: Run unit, UI, media and transcription smoke tests
         working-directory: revenue-engine/clipper
         run: python -m unittest discover -s tests -v
