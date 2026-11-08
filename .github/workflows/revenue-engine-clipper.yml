@@ -1,0 +1,24 @@
+name: Revenue Engine Clipper Tests
+
+on:
+  push:
+    branches: ["feature/revenue-engine-2027-foundation"]
+    paths:
+      - "revenue-engine/clipper/**"
+      - ".github/workflows/revenue-engine-clipper.yml"
+  pull_request:
+    paths:
+      - "revenue-engine/clipper/**"
+      - ".github/workflows/revenue-engine-clipper.yml"
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Run pure Python unit tests
+        working-directory: revenue-engine/clipper
+        run: python -m unittest discover -s tests -v
