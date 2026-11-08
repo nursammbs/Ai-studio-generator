@@ -1,22 +1,25 @@
 # Local Clipper — experimental MVP
 
-First implementation slice of Revenue Engine 2027. This package is separate from the existing topic-to-slideshow app.
+A local-first first release for repurposing authorized long-form video into reviewed vertical clips.
 
-## Current capabilities
-- Inspect local media with ffprobe.
-- Extract mono 16 kHz audio with FFmpeg.
-- Transcribe using optional faster-whisper (CPU/int8 default).
-- Suggest bounded, explainable transcript windows using deterministic heuristics.
-- Write word-timestamp SRT subtitles.
-- Render a center-cropped vertical clip with burned-in subtitles.
+## Capabilities
+- Streamlit upload and local processing interface.
+- Inspect media with ffprobe and extract mono 16 kHz audio with FFmpeg.
+- Transcribe with faster-whisper on CPU/int8 by default.
+- Suggest bounded transcript windows with explainable heuristic reasons.
+- Select/edit clip boundaries in a review table.
+- Generate word-timestamp SRT subtitles and burn them into vertical 9:16 MP4.
+- Download clips and subtitles in a ZIP.
 
 ## Not implemented
-No face tracking, diarization, browser editing timeline, cloud accounts, payments, auto-upload, or proven virality prediction. Candidate scores are heuristic ranking aids only. Human review is required.
+No face tracking, diarization, browser timeline, resumable background jobs, cloud accounts, payments, auto-upload, or proven virality prediction. The initial crop is a center crop. Candidate scores are heuristic ranking aids only. Human review is required.
 
 ## Install
-Python 3.10+, FFmpeg and ffprobe on PATH. Create a virtual environment and install requirements-clipper.txt. Run tests with: python -m unittest discover -s tests -v
+Python 3.10+, FFmpeg and ffprobe on PATH. FFmpeg must include the subtitles/libass filter. Create a virtual environment, then install requirements-clipper.txt and run: streamlit run app.py.
 
-Start with the base or small Whisper model on CPU; model download and speed depend on RAM, CPU and disk. No exact hardware profile has been assumed.
+Run pure-Python tests with: python -m unittest discover -s tests -v.
+
+Start with the base Whisper model on CPU; model download, RAM use and speed depend on hardware. No exact hardware profile has been assumed. The first model download requires internet; subsequent inference is local.
 
 ## Rights and privacy
-Only process media you own or are authorized to use. Do not bypass platform access controls. Review every suggested segment and verify captions before publishing. Keep source files local unless you intentionally configure a cloud service.
+Only process media you own or are authorized to use. Do not bypass platform access controls. Review every suggested segment and verify captions before publishing. Files are stored locally under outputs/; delete the job folder when no longer needed.
