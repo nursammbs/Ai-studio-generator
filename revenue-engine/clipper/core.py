@@ -5,6 +5,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+from difflib import SequenceMatcher
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable
@@ -24,6 +25,7 @@ class Word:
     text: str
     start: float
     end: float
+    speaker: str | None = None
 
 
 @dataclass
@@ -107,7 +109,7 @@ def transcribe(audio_path: str | Path, model_size: str = "base", device: str = "
         raise RuntimeError("Install faster-whisper to enable transcription") from exc
     if not Path(audio_path).is_file():
         raise FileNotFoundError(audio_path)
-    if model_size not in {"tiny", "base", "small", "medium", "large-v3"}:
+    if model_size not in {"tiny", "tiny.en", "base", "small", "medium", "large-v3"}:
         raise ValueError("Choose a supported faster-whisper model size")
     if device not in {"cpu", "cuda"}:
         raise ValueError("Transcription device must be cpu or cuda")
@@ -129,7 +131,10 @@ def transcribe(audio_path: str | Path, model_size: str = "base", device: str = "
 
 def load_transcript(path: str | Path) -> list[Word]:
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
-    words = [Word(str(item["text"]), float(item["start"]), float(item["end"])) for item in payload]
+    words = [
+        Word(str(item["text"]), float(item["start"]), float(item["end"]), item.get("speaker"))
+        for item in payload
+    ]
     _validate_words(words)
     return words
 
@@ -217,6 +222,72 @@ def transcript_excerpt(words: Iterable[Word], start: float, end: float) -> str:
     return " ".join(word.text for word in words if word.end > start and word.start < end).strip()
 
 
+def word_error_rate(reference: str, hypothesis: str) -> float:
+    """Return normalized word-level Levenshtein distance for a reference transcript."""
+    tokenize = lambda value: re.findall(r"[\w']+", value.casefold())
+    expected, actual = tokenize(reference), tokenize(hypothesis)
+    if not expected:
+        return 0.0 if not actual else 1.0
+    previous = list(range(len(actual) + 1))
+    for row, expected_word in enumerate(expected, start=1):
+        current = [row]
+        for column, actual_word in enumerate(actual, start=1):
+            substitution = previous[column - 1] + (expected_word != actual_word)
+            insertion = current[column - 1] + 1
+            deletion = previous[column] + 1
+            current.append(min(substitution, insertion, deletion))
+        previous = current
+    return previous[-1] / len(expected)
+
+
+def align_transcript_correction(words: list[Word], corrected_text: str) -> list[Word]:
+    """Apply edited words while retaining Whisper times wherever alignment permits."""
+    _validate_words(words)
+    new_tokens = corrected_text.split()
+    if not new_tokens:
+        raise ValueError("Corrected transcript must contain at least one word")
+    normalize = lambda value: re.sub(r"[^\w']+", "", value.casefold())
+    matcher = SequenceMatcher(
+        a=[normalize(word.text) for word in words],
+        b=[normalize(token) for token in new_tokens],
+        autojunk=False,
+    )
+    aligned: list[Word | None] = [None] * len(new_tokens)
+    for tag, old_start, old_end, new_start, new_end in matcher.get_opcodes():
+        count = new_end - new_start
+        if count <= 0:
+            continue
+        if tag == "equal":
+            for offset in range(count):
+                source = words[old_start + offset]
+                aligned[new_start + offset] = Word(
+                    new_tokens[new_start + offset], source.start, source.end, source.speaker,
+                )
+            continue
+
+        if old_end > old_start:
+            start = words[old_start].start
+            end = words[old_end - 1].end
+            speaker = words[old_start].speaker
+        else:
+            start = words[old_start - 1].end if old_start else 0.0
+            end = words[old_start].start if old_start < len(words) else start
+            speaker = words[old_start - 1].speaker if old_start else None
+            if end <= start:
+                end = start + count * 0.22
+
+        span = max(end - start, count * 0.08)
+        step = span / count
+        for offset in range(count):
+            token_start = start + step * offset
+            token_end = start + step * (offset + 1)
+            aligned[new_start + offset] = Word(new_tokens[new_start + offset], token_start, token_end, speaker)
+
+    result = [word for word in aligned if word is not None]
+    _validate_words(result)
+    return result
+
+
 def _srt_time(seconds: float) -> str:
     milliseconds = max(0, round(seconds * 1000))
     hours, milliseconds = divmod(milliseconds, 3_600_000)
@@ -240,7 +311,9 @@ def _wrap_caption(words: list[str], max_chars: int = 34) -> str:
     return "\n".join(lines)
 
 
-def _caption_cues(words: list[Word], clip_start: float, clip_end: float) -> list[tuple[float, float, str]]:
+def _caption_cues(
+    words: list[Word], clip_start: float, clip_end: float, include_speaker_labels: bool = False,
+) -> list[tuple[float, float, str]]:
     if clip_start < 0 or clip_end <= clip_start:
         raise ValueError("Clip start/end range is invalid")
     selected = [
@@ -252,8 +325,10 @@ def _caption_cues(words: list[Word], clip_start: float, clip_end: float) -> list
 
     def flush() -> None:
         if group:
-            cues.append((group[0].start - clip_start, group[-1].end - clip_start,
-                         _wrap_caption([word.text for word in group])))
+            text = _wrap_caption([word.text for word in group])
+            if include_speaker_labels and group[0].speaker:
+                text = f"{group[0].speaker}: {text}"
+            cues.append((group[0].start - clip_start, group[-1].end - clip_start, text))
             group.clear()
 
     for word in selected:
@@ -265,6 +340,7 @@ def _caption_cues(words: list[Word], clip_start: float, clip_end: float) -> list
         if group and (
             len(tentative) > 7 or len(text) > 64 or pause > 0.65
             or elapsed > 3.2 or terminal
+            or word.speaker != group[0].speaker
         ):
             flush()
         group.append(word)
@@ -274,9 +350,12 @@ def _caption_cues(words: list[Word], clip_start: float, clip_end: float) -> list
 
 def write_srt(
     words: Iterable[Word], clip_start: float, clip_end: float, target: str | Path,
+    include_speaker_labels: bool = False,
 ) -> Path:
     cue_lines: list[str] = []
-    for index, (start, end, text) in enumerate(_caption_cues(list(words), clip_start, clip_end), 1):
+    for index, (start, end, text) in enumerate(
+        _caption_cues(list(words), clip_start, clip_end, include_speaker_labels), 1,
+    ):
         if end <= start:
             continue
         cue_lines.extend([str(index), f"{_srt_time(start)} --> {_srt_time(end)}", text, ""])
@@ -310,7 +389,8 @@ def render_clip(
     video_path: str | Path, candidate: Candidate, subtitle_path: str | Path,
     output_path: str | Path, width: int = 1080, height: int = 1920,
     caption_font_size: int = 46, caption_margin_v: int = 250,
-    framing: str = "center_crop",
+    framing: str = "center_crop", transition: str = "none",
+    subject_center: tuple[float, float] | None = None,
 ) -> Path:
     if width <= 0 or height <= 0:
         raise ValueError("Output dimensions must be positive")
@@ -318,8 +398,10 @@ def render_clip(
         raise ValueError("Clip start/end range is invalid")
     if not 24 <= caption_font_size <= 96 or not 80 <= caption_margin_v <= 500:
         raise ValueError("Caption size or position is outside the supported range")
-    if framing not in {"center_crop", "fit"}:
-        raise ValueError("Framing must be center_crop or fit")
+    if framing not in {"center_crop", "fit", "subject_focus"}:
+        raise ValueError("Framing must be center_crop, fit or subject_focus")
+    if transition not in {"none", "fade"}:
+        raise ValueError("Transition must be none or fade")
     if Path(output_path).suffix.lower() != ".mp4":
         raise ValueError("Rendered clips must use the .mp4 extension")
     if not shutil.which("ffmpeg"):
@@ -336,25 +418,52 @@ def render_clip(
     target.parent.mkdir(parents=True, exist_ok=True)
     temporary = target.with_name(f"{target.stem}.partial{target.suffix or '.mp4'}")
     subtitle = str(subtitle_file.resolve()).replace("\\", "/").replace(":", "\\:").replace("'", "\\'")
-    framing_filter = (
-        f"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height}"
-        if framing == "center_crop"
-        else f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=black"
-    )
+    if framing == "fit":
+        framing_filter = f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=black"
+    elif framing == "subject_focus":
+        if subject_center is None:
+            from reframing import detect_subject_center
+            subject_center = detect_subject_center(video, candidate.start, candidate.end)
+        if subject_center is None:
+            framing_filter = f"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height}"
+        else:
+            center_x, center_y = (min(max(float(value), 0.0), 1.0) for value in subject_center)
+            framing_filter = (
+                f"scale={width}:{height}:force_original_aspect_ratio=increase,"
+                f"crop={width}:{height}:min(max(iw*{center_x:.5f}-{width}/2,0),iw-{width}):"
+                f"min(max(ih*{center_y:.5f}-{height}/2,0),ih-{height})"
+            )
+    else:
+        framing_filter = f"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height}"
     video_filter = (
         f"{framing_filter},subtitles='{subtitle}':force_style='FontName=Arial,"
         f"FontSize={caption_font_size},Outline=4,Shadow=1,Alignment=2,MarginV={caption_margin_v}'"
     )
+    clip_duration = candidate.end - candidate.start
+    fade_duration = min(0.35, clip_duration / 6)
+    audio_filter = None
+    if transition == "fade":
+        video_filter += (
+            f",fade=t=in:st=0:d={fade_duration:.3f}"
+            f",fade=t=out:st={clip_duration - fade_duration:.3f}:d={fade_duration:.3f}"
+        )
+        audio_filter = (
+            f"afade=t=in:st=0:d={fade_duration:.3f},"
+            f"afade=t=out:st={clip_duration - fade_duration:.3f}:d={fade_duration:.3f}"
+        )
     try:
-        run_checked([
+        command = [
             "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
             "-ss", f"{candidate.start:.3f}", "-i", str(video),
             "-t", f"{candidate.end - candidate.start:.3f}",
             "-map", "0:v:0", "-map", "0:a?", "-vf", video_filter,
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "22",
             "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k",
-            "-movflags", "+faststart", str(temporary),
-        ])
+        ]
+        if audio_filter:
+            command += ["-af", audio_filter]
+        command += ["-movflags", "+faststart", str(temporary)]
+        run_checked(command)
         validate_rendered_clip(temporary, candidate.end - candidate.start)
         temporary.replace(target)
     finally:
@@ -387,4 +496,3 @@ def save_json_atomic(payload: dict, target: str | Path) -> Path:
         if temporary_name:
             Path(temporary_name).unlink(missing_ok=True)
     return output
-

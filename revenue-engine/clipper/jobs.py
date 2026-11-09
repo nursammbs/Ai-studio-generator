@@ -32,7 +32,7 @@ class JobStore:
             raise ValueError("Job path escapes the storage root")
         return target
 
-    def create(self, source_name: str, source_path: str | Path) -> dict:
+    def create(self, source_name: str, source_path: str | Path, owner_id: str = "local") -> dict:
         job_id = uuid.uuid4().hex[:12]
         directory = self._job_dir(job_id)
         directory.mkdir(parents=True, exist_ok=False)
@@ -45,6 +45,7 @@ class JobStore:
             "status": "created",
             "stage": "upload",
             "source_name": source_name,
+            "owner_id": owner_id,
             "source_path": str(Path(source_path).resolve()),
             "media": None,
             "model_size": "base",
@@ -69,24 +70,27 @@ class JobStore:
         updated["updated_at"] = utc_now()
         return save_json_atomic(updated, directory / "job.json")
 
-    def load(self, job_id: str) -> dict:
+    def load(self, job_id: str, owner_id: str | None = None) -> dict:
         manifest = self._job_dir(job_id) / "job.json"
         if not manifest.is_file():
             raise FileNotFoundError(f"Saved job not found: {job_id}")
         job = json.loads(manifest.read_text(encoding="utf-8"))
         if job.get("id") != job_id or job.get("schema_version") != _SCHEMA_VERSION:
             raise ValueError("Saved job manifest is invalid or unsupported")
+        if owner_id is not None and job.get("owner_id", "local") != owner_id:
+            raise PermissionError("This job belongs to another account")
         return job
 
-    def list(self, limit: int = 30) -> list[dict]:
+    def list(self, limit: int = 30, owner_id: str | None = None) -> list[dict]:
         if limit < 0:
             raise ValueError("Job limit must not be negative")
         jobs: list[dict] = []
         for path in self.root.glob("*/job.json"):
             try:
-                jobs.append(self.load(path.parent.name))
+                job = self.load(path.parent.name)
+                if owner_id is None or job.get("owner_id", "local") == owner_id:
+                    jobs.append(job)
             except (OSError, ValueError, TypeError):
                 continue
         jobs.sort(key=lambda item: item.get("updated_at", ""), reverse=True)
         return jobs[:limit]
-

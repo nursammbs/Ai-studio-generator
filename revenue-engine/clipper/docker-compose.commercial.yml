@@ -1,0 +1,48 @@
+services:
+  app:
+    build:
+      context: ../..
+      dockerfile: revenue-engine/clipper/Dockerfile.commercial
+    command: ["streamlit", "run", "app.py", "--server.address=0.0.0.0", "--server.port=8501", "--server.maxUploadSize=2048"]
+    env_file: .env
+    environment:
+      CLIPPER_REQUIRE_AUTH: "1"
+      CLIPPER_SAAS_DB: /data/clipper-platform.sqlite3
+    volumes:
+      - clipper-data:/data
+      - clipper-outputs:/app/clipper/outputs
+    expose: ["8501"]
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ../..
+      dockerfile: revenue-engine/clipper/Dockerfile.commercial
+    command: ["uvicorn", "saas.api:app", "--host=0.0.0.0", "--port=8000", "--workers=2"]
+    env_file: .env
+    environment:
+      CLIPPER_SAAS_DB: /data/clipper-platform.sqlite3
+    volumes:
+      - clipper-data:/data
+    expose: ["8000"]
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    environment:
+      CLIPPER_DOMAIN: ${CLIPPER_DOMAIN:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on: [app, api]
+    restart: unless-stopped
+
+volumes:
+  clipper-data:
+  clipper-outputs:
+  caddy-data:
+  caddy-config:

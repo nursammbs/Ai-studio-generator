@@ -1,0 +1,23 @@
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends ffmpeg libass9 ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app/clipper
+COPY revenue-engine/clipper/requirements-clipper.txt /tmp/requirements-clipper.txt
+COPY revenue-engine/clipper/requirements-saas.txt /tmp/requirements-saas.txt
+RUN python -m pip install --upgrade pip \
+    && python -m pip install -r /tmp/requirements-saas.txt
+
+COPY revenue-engine/clipper /app/clipper
+RUN mkdir -p /data /app/clipper/outputs \
+    && useradd --create-home --uid 10001 appuser \
+    && chown -R appuser:appuser /data /app/clipper
+
+USER appuser
+EXPOSE 8000 8501
