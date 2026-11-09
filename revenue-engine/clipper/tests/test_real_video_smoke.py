@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import re
 import shutil
 import tempfile
 import time
@@ -16,7 +17,6 @@ from core import (
     transcribe,
     validate_rendered_clip,
     validate_video,
-    word_error_rate,
     write_srt,
 )
 
@@ -56,6 +56,24 @@ def _srt_text(path: Path) -> str:
     return " ".join(text_lines)
 
 
+def _word_error_rate(reference: str, hypothesis: str) -> float:
+    expected = re.findall(r"[\w']+", reference.casefold())
+    actual = re.findall(r"[\w']+", hypothesis.casefold())
+    if not expected:
+        return 0.0 if not actual else 1.0
+    previous = list(range(len(actual) + 1))
+    for row, expected_word in enumerate(expected, start=1):
+        current = [row]
+        for column, actual_word in enumerate(actual, start=1):
+            current.append(min(
+                previous[column - 1] + (expected_word != actual_word),
+                current[column - 1] + 1,
+                previous[column] + 1,
+            ))
+        previous = current
+    return previous[-1] / len(expected)
+
+
 @unittest.skipUnless(_READY, "CI installs FFmpeg and faster-whisper for the real-video smoke test")
 class RealVideoSmokeTests(unittest.TestCase):
     def test_nasa_interview_runs_through_transcription_selection_and_render(self):
@@ -83,7 +101,7 @@ class RealVideoSmokeTests(unittest.TestCase):
             hypothesis = " ".join(word.text for word in words)
             self.assertGreater(len(words), 100, "Real interview speech should produce a substantial transcript")
 
-            wer = word_error_rate(_srt_text(reference), hypothesis)
+            wer = _word_error_rate(_srt_text(reference), hypothesis)
             self.assertLessEqual(wer, 0.40, f"Real-video transcription WER was too high: {wer:.3f}")
             print(
                 f"REAL_VIDEO_METRICS source=nasa-gold-interview "
