@@ -3,7 +3,7 @@ on:
   push:
     branches: [feat/cpu-first-quick-video-mvp]
   pull_request:
-    branches: [main]
+    branches: [feature/revenue-engine-2027-foundation]
     paths:
       - "quick-video-studio/**"
       - ".github/workflows/quick-video-studio.yml"
