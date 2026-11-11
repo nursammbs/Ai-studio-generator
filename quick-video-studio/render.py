@@ -58,18 +58,20 @@ def make_card(scene: dict[str, Any], index: int, total: int, destination: Path,
                            radius=6, fill=accent)
     draw.text((margin, int(height * .16)), f"SCENE {index:02d}  /  {total:02d}",
               font=font(26, True), fill="#B8C5D8")
-    title_font = font(max(42, int(width * .075)), True)
-    body_font = font(max(28, int(width * .042)))
+    title_size = max(42, int(width * .075))
+    body_size = max(28, int(width * .042))
+    title_font = font(title_size, True)
+    body_font = font(body_size)
     title_lines = wrap_text(draw, scene.get("title", "Untitled scene"), title_font, width - 2 * margin)
     y = int(height * .29)
     for line in title_lines[:4]:
         draw.text((margin, y), line, font=title_font, fill="#FFFFFF")
-        y += int(title_font.size * 1.2)
+        y += int(title_size * 1.2)
     y += int(height * .055)
     body_lines = wrap_text(draw, scene.get("text", ""), body_font, width - 2 * margin)
     for line in body_lines[:10]:
         draw.text((margin, y), line, font=body_font, fill="#D9E2EF")
-        y += int(body_font.size * 1.55)
+        y += int(body_size * 1.55)
     draw.text((margin, int(height * .91)), "MADE WITH CPU-FIRST VIDEO STUDIO",
               font=font(19, True), fill="#8796AA")
     draw.text((width - margin - 80, int(height * .91)), f"{index:02d}",
