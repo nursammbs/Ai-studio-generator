@@ -12,7 +12,14 @@ class StreamlitUiSmokeTests(unittest.TestCase):
         result = AppTest.from_file(str(app), default_timeout=60).run()
         self.assertFalse(result.exception)
         self.assertTrue(any(title.value == "Local Clipper" for title in result.title))
-        self.assertEqual(len(result.file_uploader), 1)
+        upload_labels = {uploader.label for uploader in result.file_uploader}
+        self.assertEqual(
+            upload_labels,
+            {
+                "Upload a video you own or are authorized to process",
+                "Optional reference transcript for WER measurement",
+            },
+        )
 
 
 if __name__ == "__main__":
