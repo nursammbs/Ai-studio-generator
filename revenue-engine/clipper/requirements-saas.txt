@@ -1,0 +1,7 @@
+# Optional hosted deployment layer; install only for a commercial deployment.
+-r requirements-clipper.txt
+fastapi>=0.115,<1
+uvicorn[standard]>=0.34,<1
+stripe>=12,<16
+boto3>=1.37,<2
+prometheus-client>=0.22,<1
