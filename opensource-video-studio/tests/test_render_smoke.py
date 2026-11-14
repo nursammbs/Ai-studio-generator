@@ -12,7 +12,7 @@ def test_smoke_renders_video_and_outputs(monkeypatch, tmp_path):
     monkeypatch.setattr(engine, "OUTPUTS", tmp_path / "outputs")
     monkeypatch.setattr(engine, "_commons_image", lambda query: None)
 
-    def make_test_voice(text, target, language):
+    def make_test_voice(text, target, language, *args, **kwargs):
         subprocess.run(
             [
                 "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
