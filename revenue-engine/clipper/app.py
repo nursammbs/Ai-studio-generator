@@ -650,6 +650,6 @@ if active_job:
             if metrics.get("export_selection_rate") is not None:
                 cols[3].metric("Suggestions exported", f"{metrics['export_selection_rate']:.0%}")
             if metrics.get("transcript_wer") is not None:
-            cols[4].metric("Transcript WER", f"{metrics['transcript_wer']:.1%}")
-        if metrics.get("estimated_processing_cost_usd") is not None:
-            st.metric("Estimated configured processing cost", f"${metrics['estimated_processing_cost_usd']:.4f}")
+                cols[4].metric("Transcript WER", f"{metrics['transcript_wer']:.1%}")
+            if metrics.get("estimated_processing_cost_usd") is not None:
+                st.metric("Estimated configured processing cost", f"${metrics['estimated_processing_cost_usd']:.4f}")
