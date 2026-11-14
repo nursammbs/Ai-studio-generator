@@ -1,55 +1,54 @@
-# CepatCuan Studio
+# AI Media Studio
 
-AI-assisted promotion kits for Indonesian small businesses.
+A local-first workspace for creating and reviewing original videos, animations, and media assets. The core direction is **creative production**, not an UMKM promotion or small-business marketing product.
 
-**Live site:** https://cepatcuan-studio.floot.app
+The repository contains separate modules. They are not one monolithic application; each has its own dependencies and maturity level. The preferred low-cost path uses Python, Pillow, and FFmpeg. AI models and cloud APIs are optional and must be evaluated separately for hardware needs, cost, and license.
 
-## What it sells
+## Production modules
 
-- **Starter — Rp29,000:** landing-page copy, 7 social captions, WhatsApp message.
-- **Growth — Rp59,000:** Starter plus campaign ideas.
-- **Studio — Rp99,000:** Growth plus a 14-day content calendar and FAQs.
+### Open Source Video Studio
 
-These are initial launch prices to validate with real customers, not proven market rates.
+[Open Source Video Studio](opensource-video-studio/README.md) creates a reviewable video draft from a topic:
 
-## Automation flow
+1. Collects starter references from Wikipedia.
+2. Drafts narration with an optional local Ollama model or a deterministic fallback.
+3. Generates narration with Edge TTS or system TTS; VoiceStudio is available as an optional OpenAI-compatible local TTS backend.
+4. Finds candidate images on Wikimedia Commons and saves attribution details.
+5. Renders vertical Shorts or horizontal video with FFmpeg.
+6. Saves the MP4, thumbnail, script, sources, and image attribution for manual review.
 
-1. A buyer submits a business brief and selects a fixed-price package.
-2. The server creates an order using server-side prices.
-3. Midtrans Snap hosts the checkout. The browser never receives the merchant Server Key.
-4. A signed Midtrans notification is checked server-side, including signature, order ID, amount and currency.
-5. After verified payment, the app uses an AI writing model to generate an Indonesian-language kit. If AI is temporarily unavailable, the system has a deterministic fallback.
-6. The buyer returns to a token-protected order page to copy or download the kit.
+The app does not automatically upload videos. Source summaries and image-license metadata are not legal or factual verification; check original sources and licenses before publishing.
 
-## Merchant setup before accepting real payments
+### AI Anime Studio
 
-1. Register and complete the required verification with Midtrans.
-2. Store `MIDTRANS_SERVER_KEY` and `MIDTRANS_ENV` as secured server-side environment variables. Start with `MIDTRANS_ENV=sandbox`; never commit either value.
-3. For production, use the production Server Key only after merchant verification.
-4. Configure the settlement bank account in the Midtrans Merchant Administration Portal. Enable **Auto-Withdrawal** and choose its schedule if available for the merchant account.
-5. Test a sandbox transaction and a signed callback end-to-end before announcing paid checkout.
+[AI Anime Studio](ai-anime-studio/README.md) contains a shot-based animation prototype, including a traditional 2D sprite pipeline and optional ComfyUI integration. The no-GPU sprite path is deterministic animation, not full AI-generated cinematic video. True image generation requires a separately installed ComfyUI setup, compatible model weights, and sufficient compute.
 
-The app sends a per-transaction notification override to:
+### Video API Hub
 
-`https://cepatcuan-studio.floot.app/_api/midtrans-notification`
+[Video API Hub](video-api-hub/README.md) provides a local interface for optional video-generation providers. Real cloud generation requires valid provider accounts, API keys, and may incur usage charges.
 
-Payment processing and bank settlement depend on the merchant account and provider settings. A website cannot bypass payment-provider onboarding or settlement rules. Follow the current official docs:
-- https://docs.midtrans.com/docs/snap-snap-integration-guide
-- https://docs.midtrans.com/docs/how-can-i-have-my-money-in-my-account-payout
+### Personal AI Workbench
 
-## Important implementation note
+[Personal AI Workbench](personal-ai-agent/README.md) is a bounded local assistant connected to Ollama. Its tools are deliberately allowlisted; it does not execute arbitrary shell commands or publish content automatically.
 
-The live implementation uses Floot's page, database, endpoint and AI runtime conventions (including `@floot/ai`). The Floot runtime is required to execute the current application code; this repository is the project documentation and source-export home, not a standalone GitHub Pages deployment. Never publish production secrets, customer data, API keys, or payment tokens in Git.
+## Integration assessment
 
-## Trust and claims
+See [the open-source integration assessment](integrations/OPEN_SOURCE_INTEGRATION_ASSESSMENT.md) for the review of OpenCode, VoiceStudio, OpenSEO, OpenMausBot, and Replica, including why only VoiceStudio is currently wired into the video workflow.
 
-The generator drafts promotional content; it cannot guarantee sales, virality, or factual correctness of details absent from the buyer's brief. Verify claims, pricing, promotions, availability and business details before publication.
+## Hardware and cost boundaries
 
-## Experimental animation module
+- FFmpeg/Pillow rendering is the predictable CPU-first foundation.
+- Local AI inference speed depends on the selected model, RAM, CPU, and (where used) GPU. “Open source” does not mean lightweight or free to run.
+- Cloud video APIs and SEO data services can incur usage-based charges.
+- Model weights, voices, fonts, datasets, stock footage, and music may have licenses different from the application's source code.
+- No module guarantees views, channel growth, monetization, or income.
 
-The repository also contains an early **AI Anime Studio** prototype in [ai-anime-studio](ai-anime-studio/README.md). It combines a local ComfyUI API integration with a three-scene MP4 animatic renderer. Its offline demo and API mock tests validate the rendering and integration scaffolding; true image generation requires a local ComfyUI installation, models, and an exported API workflow. It is not yet a full frame-by-frame anime generator.
+## Legacy Floot prototype
 
+`floot-source/` is retained as an older Floot-based promotional-kit and payment-flow prototype. It is not the current product direction and is not part of the active video-production roadmap. Its source is preserved rather than deleted.
 
-## AI Anime Studio pilot milestone
+## General setup
 
-An AI-assisted cartoon pilot is now rendered: original AI-generated cat/mouse character poses are composited into a 15-second 1280×720, 24 FPS MP4 with moving backgrounds, pose changes and an original synthesized audio cue. The source renderer is in [ai-anime-studio/sprite_animator.py](ai-anime-studio/sprite_animator.py). It is sprite animation, not full generative video; use the accompanying downloadable pilot package for the PNG pose sheet and finished MP4.
+Start with the README inside the module you intend to run. Most Python modules require Python 3.10+, a virtual environment, and their own `requirements.txt`. Video rendering modules also require FFmpeg and ffprobe on `PATH`.
+
+Do not commit API keys, voice samples, private source media, generated customer data, or paid model weights to Git.
