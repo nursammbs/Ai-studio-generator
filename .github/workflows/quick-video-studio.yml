@@ -1,12 +1,20 @@
 name: Quick Video Studio
+
 on:
   push:
-    branches: [feat/cpu-first-quick-video-mvp]
-  pull_request:
-    branches: [feature/revenue-engine-2027-foundation]
+    branches:
+      - main
+      - feat/cpu-first-quick-video-main
     paths:
       - "quick-video-studio/**"
       - ".github/workflows/quick-video-studio.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "quick-video-studio/**"
+      - ".github/workflows/quick-video-studio.yml"
+
 jobs:
   cpu-first-render:
     runs-on: ubuntu-latest
