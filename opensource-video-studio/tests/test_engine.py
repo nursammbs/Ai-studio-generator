@@ -1,3 +1,6 @@
+import pytest
+
+import engine
 from engine import fallback_scenes_for_test
 
 
@@ -18,8 +21,6 @@ def test_smoke_renders_real_mp4_with_ffmpeg(tmp_path, monkeypatch):
     import shutil
     import subprocess
     from pathlib import Path
-    import engine
-
     if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
         import pytest
         pytest.skip("FFmpeg/ffprobe are required for the rendering smoke test")
@@ -27,7 +28,7 @@ def test_smoke_renders_real_mp4_with_ffmpeg(tmp_path, monkeypatch):
     monkeypatch.setattr(engine, "OUTPUTS", tmp_path / "outputs")
     monkeypatch.setattr(engine, "_commons_image", lambda query: None)
 
-    def fake_voice(text, target, language):
+    def fake_voice(text, target, language, *args, **kwargs):
         subprocess.run(
             ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
              "-f", "lavfi", "-i", "sine=frequency=440:duration=0.7",
@@ -63,3 +64,67 @@ def test_smoke_renders_real_mp4_with_ffmpeg(tmp_path, monkeypatch):
     artifact_dir.mkdir(parents=True, exist_ok=True)
     shutil.copy2(video, artifact_dir / "smoke-video.mp4")
     shutil.copy2(job / "thumbnail.jpg", artifact_dir / "smoke-thumbnail.jpg")
+
+
+
+def test_voicestudio_tts_uses_openai_compatible_local_api(tmp_path, monkeypatch):
+    captured = {}
+
+    class FakeResponse:
+        headers = {"Content-Type": "audio/mpeg"}
+        content = b"ID3" + (b"voice-audio" * 20)
+
+        def raise_for_status(self):
+            return None
+
+    def fake_post(url, **kwargs):
+        captured["url"] = url
+        captured.update(kwargs)
+        return FakeResponse()
+
+    monkeypatch.setattr(engine.requests, "post", fake_post)
+    target = tmp_path / "voice.mp3"
+    engine._make_voice(
+        "Contoh narasi Bahasa Indonesia.",
+        target,
+        "id",
+        "voicestudio",
+        base_url="http://127.0.0.1:3900",
+        model="tts-1",
+        voice="alloy",
+        api_key="local-test-key",
+    )
+
+    assert captured["url"] == "http://127.0.0.1:3900/v1/audio/speech"
+    assert captured["json"] == {
+        "model": "tts-1",
+        "voice": "alloy",
+        "input": "Contoh narasi Bahasa Indonesia.",
+        "response_format": "mp3",
+    }
+    assert captured["headers"]["Authorization"] == "Bearer local-test-key"
+    assert target.read_bytes().startswith(b"ID3")
+
+
+def test_voicestudio_rejects_remote_http_and_missing_key(tmp_path):
+    with pytest.raises(ValueError, match="HTTPS and an API key"):
+        engine._voicestudio_speech(
+            "private narration",
+            tmp_path / "voice.mp3",
+            base_url="http://voice.example.com/v1",
+        )
+
+
+def test_voicestudio_rejects_non_audio_response(tmp_path, monkeypatch):
+    class FakeResponse:
+        headers = {"Content-Type": "application/json"}
+        content = b'{"detail":"model not ready"}'
+
+        def raise_for_status(self):
+            return None
+
+    monkeypatch.setattr(engine.requests, "post", lambda *args, **kwargs: FakeResponse())
+    target = tmp_path / "voice.mp3"
+    with pytest.raises(RuntimeError, match="non-audio response"):
+        engine._voicestudio_speech("Hello", target, base_url="http://localhost:3900/v1")
+    assert not target.exists()

@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import json
+import os
 import re
 import subprocess
 import time
 import textwrap
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import requests
 from PIL import Image, ImageDraw, ImageFont, ImageOps
@@ -213,31 +216,138 @@ def _download_image(url: str, target: Path) -> bool:
         return False
 
 
-def _make_voice(text: str, target: Path, language: str):
+def _voicestudio_speech(
+    text: str,
+    target: Path,
+    *,
+    base_url: str | None = None,
+    model: str | None = None,
+    voice: str | None = None,
+    api_key: str | None = None,
+) -> None:
+    """Request speech from VoiceStudio's OpenAI-compatible local API.
+
+    The default is loopback-only. A remote endpoint is accepted only with
+    HTTPS and an explicit API key; credentials are never put in the URL.
+    """
+    base = (base_url or os.getenv("VOICESTUDIO_BASE_URL") or "http://127.0.0.1:3900/v1").strip().rstrip("/")
+    parsed = urlsplit(base)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password:
+        raise ValueError("VoiceStudio URL must be a valid http(s) URL without embedded credentials.")
+    if parsed.query or parsed.fragment:
+        raise ValueError("VoiceStudio URL must not contain query parameters or fragments.")
+
+    hostname = parsed.hostname.lower()
+    try:
+        is_loopback = ipaddress.ip_address(hostname).is_loopback
+    except ValueError:
+        is_loopback = hostname == "localhost"
+    secret = (api_key or os.getenv("VOICESTUDIO_API_KEY") or "").strip()
+    if not is_loopback and (parsed.scheme != "https" or not secret):
+        raise ValueError("Remote VoiceStudio requires HTTPS and an API key. Use localhost for the default local setup.")
+
+    path = parsed.path.rstrip("/")
+    if not path.endswith("/v1"):
+        path = f"{path}/v1" if path else "/v1"
+    endpoint = f"{parsed.scheme}://{parsed.netloc}{path}/audio/speech"
+    headers = {"Accept": "audio/mpeg"}
+    if secret:
+        headers["Authorization"] = f"Bearer {secret}"
+
+    payload = {
+        "model": (model or os.getenv("VOICESTUDIO_MODEL") or "tts-1").strip(),
+        "voice": (voice or os.getenv("VOICESTUDIO_VOICE") or "alloy").strip(),
+        "input": text,
+        "response_format": "mp3",
+    }
+    try:
+        response = requests.post(endpoint, json=payload, headers=headers, timeout=(5, 240))
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        raise RuntimeError("VoiceStudio TTS request failed. Check that its local backend is running and a TTS engine is ready.") from exc
+
+    media_type = response.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+    if not media_type.startswith("audio/") and media_type not in {"application/octet-stream", "binary/octet-stream"}:
+        raise RuntimeError("VoiceStudio returned a non-audio response. Check its active TTS engine and API status.")
+    if not response.content:
+        raise RuntimeError("VoiceStudio returned an empty audio file.")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = target.with_name(target.name + ".part")
+    try:
+        temporary.write_bytes(response.content)
+        if temporary.stat().st_size < 32:
+            raise RuntimeError("VoiceStudio audio response is too small to be valid.")
+        temporary.replace(target)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _edge_voice(text: str, target: Path, language: str) -> None:
     import edge_tts
+
     voice = "id-ID-GadisNeural" if language == "id" else "en-US-AriaNeural"
 
     async def create():
         await edge_tts.Communicate(text, voice).save(str(target))
 
+    asyncio.run(create())
+
+
+def _system_voice(text: str, target: Path) -> None:
+    import pyttsx3
+
+    wav = target.with_suffix(".wav")
+    engine = pyttsx3.init()
     try:
-        asyncio.run(create())
+        engine.save_to_file(text, str(wav))
+        engine.runAndWait()
+    finally:
+        engine.stop()
+    if not wav.exists() or wav.stat().st_size == 0:
+        raise RuntimeError("System TTS did not create audio.")
+    try:
+        subprocess.run(
+            ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", str(wav), str(target)],
+            check=True, capture_output=True, text=True,
+        )
+    finally:
+        wav.unlink(missing_ok=True)
+
+
+def _make_voice(
+    text: str,
+    target: Path,
+    language: str,
+    provider: str = "auto",
+    *,
+    base_url: str | None = None,
+    model: str | None = None,
+    voice: str | None = None,
+    api_key: str | None = None,
+) -> None:
+    """Create narration with an explicit provider or the legacy auto fallback."""
+    selected = (provider or "auto").strip().lower()
+    if selected == "voicestudio":
+        _voicestudio_speech(text, target, base_url=base_url, model=model, voice=voice, api_key=api_key)
         return
-    except Exception as original_error:
+    if selected == "edge":
+        _edge_voice(text, target, language)
+        return
+    if selected == "system":
+        _system_voice(text, target)
+        return
+    if selected != "auto":
+        raise ValueError("Unknown TTS provider. Choose auto, voicestudio, edge, or system.")
+
+    try:
+        _edge_voice(text, target, language)
+        return
+    except Exception as edge_error:
+        target.unlink(missing_ok=True)
         try:
-            import pyttsx3
-            wav = target.with_suffix(".wav")
-            engine = pyttsx3.init()
-            engine.save_to_file(text, str(wav))
-            engine.runAndWait()
-            engine.stop()
-            if not wav.exists() or wav.stat().st_size == 0:
-                raise RuntimeError("System TTS did not create audio")
-            subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", str(wav), str(target)],
-                           check=True, capture_output=True, text=True)
-            wav.unlink(missing_ok=True)
-        except Exception as fallback_error:
-            raise RuntimeError("TTS failed. Check internet/Edge TTS or install pyttsx3 and a system voice.") from original_error
+            _system_voice(text, target)
+        except Exception as system_error:
+            raise RuntimeError("TTS gagal. Periksa Edge TTS atau pasang suara sistem melalui pyttsx3.") from system_error
 
 
 def _duration(audio: Path) -> float:
@@ -261,8 +371,19 @@ def _render_scene(card: Path, audio: Path, target: Path, size: tuple[int, int]):
     subprocess.run(cmd, check=True, capture_output=True, text=True)
 
 
-def create_video(topic: str, scenes: list[dict[str, str]], sources: list[dict[str, str]],
-                 language: str = "id", aspect: str = "9:16", progress=None) -> Path:
+def create_video(
+    topic: str,
+    scenes: list[dict[str, str]],
+    sources: list[dict[str, str]],
+    language: str = "id",
+    aspect: str = "9:16",
+    progress=None,
+    voice_provider: str = "auto",
+    voice_model: str | None = None,
+    voice_name: str | None = None,
+    voice_base_url: str | None = None,
+    voice_api_key: str | None = None,
+) -> Path:
     OUTPUTS.mkdir(parents=True, exist_ok=True)
     safe = re.sub(r"[^A-Za-z0-9_-]+", "-", topic.lower()).strip("-")[:40] or "video"
     job = OUTPUTS / f"{safe}-{int(time.time())}"
@@ -281,7 +402,16 @@ def create_video(topic: str, scenes: list[dict[str, str]], sources: list[dict[st
         card = assets / f"card-{i + 1:02d}.jpg"
         _make_card(picture, scene["heading"], i, len(scenes), size, card)
         audio = assets / f"voice-{i + 1:02d}.mp3"
-        _make_voice(scene["narration"], audio, language)
+        _make_voice(
+            scene["narration"],
+            audio,
+            language,
+            voice_provider,
+            base_url=voice_base_url,
+            model=voice_model,
+            voice=voice_name,
+            api_key=voice_api_key,
+        )
         segment = assets / f"segment-{i + 1:02d}.mp4"
         _render_scene(card, audio, segment, size)
         segments.append(segment)
