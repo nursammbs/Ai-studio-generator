@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 import streamlit as st
 
@@ -31,6 +32,30 @@ with st.form("create_video"):
     style = st.selectbox("Gaya", ["Penjelasan edukatif", "Storytelling", "Tutorial", "Analisis kritis"])
     use_ollama = st.checkbox("Gunakan Ollama lokal untuk menyusun naskah", value=False)
     model = st.text_input("Model Ollama (jika aktif)", value="qwen2.5:3b")
+
+    voice_choices = {
+        "Otomatis (Edge TTS, lalu suara sistem)": "auto",
+        "VoiceStudio lokal (OpenAI-compatible API)": "voicestudio",
+        "Edge TTS": "edge",
+        "Suara sistem (pyttsx3)": "system",
+    }
+    voice_provider_label = st.selectbox("Mesin narasi", list(voice_choices))
+    voice_provider = voice_choices[voice_provider_label]
+    voice_base_url = voice_model = voice_name = voice_api_key = None
+    if voice_provider == "voicestudio":
+        st.caption("VoiceStudio harus sudah berjalan di komputer ini dan memiliki mesin TTS/model yang siap.")
+        voice_base_url = st.text_input(
+            "VoiceStudio API base URL",
+            value=os.getenv("VOICESTUDIO_BASE_URL", "http://127.0.0.1:3900/v1"),
+        )
+        voice_model = st.text_input("Model API", value=os.getenv("VOICESTUDIO_MODEL", "tts-1"))
+        voice_name = st.text_input("Voice alias / preset", value=os.getenv("VOICESTUDIO_VOICE", "alloy"))
+        voice_api_key = st.text_input(
+            "API key (hanya wajib untuk server remote)",
+            value="",
+            type="password",
+        )
+        st.warning("Jangan buka port VoiceStudio ke internet. Server remote hanya diterima melalui HTTPS dan API key.")
     create = st.form_submit_button("Buat draf dan render video", type="primary", use_container_width=True)
 
 if create:
@@ -59,7 +84,19 @@ if create:
             def update(value, message):
                 progress.progress(min(max(value, 0.0), 1.0), text=message)
                 status.info(message)
-            job = create_video(topic.strip(), scenes, sources, language, aspect, update)
+            job = create_video(
+                topic.strip(),
+                scenes,
+                sources,
+                language,
+                aspect,
+                update,
+                voice_provider=voice_provider,
+                voice_model=voice_model,
+                voice_name=voice_name,
+                voice_base_url=voice_base_url,
+                voice_api_key=voice_api_key,
+            )
             video = job / "video.mp4"
             st.success("Render selesai. Hasil belum diunggah ke YouTube.")
             st.video(str(video))
