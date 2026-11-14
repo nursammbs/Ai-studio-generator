@@ -1,0 +1,23 @@
+{
+  "title": "Contoh Video Pendek",
+  "scenes": [
+    {
+      "duration": 5,
+      "title": "Jangan cuma sibuk",
+      "text": "Banyak orang bekerja keras setiap hari, tetapi tidak pernah mengukur hasil yang benar-benar penting.",
+      "background": "#101827"
+    },
+    {
+      "duration": 6,
+      "title": "Ukur kemajuan",
+      "text": "Pilih satu target. Catat titik awal, ukur kemajuan, lalu perbaiki satu hal setiap minggu.",
+      "background": "#183044"
+    },
+    {
+      "duration": 5,
+      "title": "Mulai dari langkah kecil",
+      "text": "Konsistensi bukan soal melakukan semuanya. Konsistensi adalah mengulang hal yang paling berdampak.",
+      "background": "#30213c"
+    }
+  ]
+}
