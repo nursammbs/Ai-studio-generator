@@ -1,0 +1,95 @@
+name: HeadTTS CPU dialogue integration
+
+on:
+  pull_request:
+    paths:
+      - "ai-anime-studio/headtts_bridge.py"
+      - "ai-anime-studio/headtts-node.cpu.json"
+      - "ai-anime-studio/traditional_2d_pipeline.py"
+      - "ai-anime-studio/tests/test_headtts_live_integration.py"
+      - ".github/workflows/headtts-cpu-integration.yml"
+  push:
+    branches: [main]
+    paths:
+      - "ai-anime-studio/headtts_bridge.py"
+      - "ai-anime-studio/headtts-node.cpu.json"
+      - "ai-anime-studio/traditional_2d_pipeline.py"
+      - "ai-anime-studio/tests/test_headtts_live_integration.py"
+      - ".github/workflows/headtts-cpu-integration.yml"
+
+jobs:
+  kokoro-cpu-to-mp4:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out project
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: ai-anime-studio/requirements.txt
+
+      - name: Install media tools and Python dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          python -m pip install -r ai-anime-studio/requirements.txt
+
+      - name: Install HeadTTS
+        run: |
+          git clone --depth 1 https://github.com/met4citizen/HeadTTS.git /tmp/HeadTTS
+          cd /tmp/HeadTTS
+          npm install
+
+      - name: Start local CPU HeadTTS service
+        working-directory: /tmp/HeadTTS
+        run: |
+          node ./modules/headtts-node.mjs \
+            --config "$GITHUB_WORKSPACE/ai-anime-studio/headtts-node.cpu.json" \
+            > /tmp/headtts-node.log 2>&1 &
+          echo $! > /tmp/headtts-node.pid
+          for attempt in $(seq 1 90); do
+            code=$(curl -sS -o /tmp/headtts-health.txt -w "%{http_code}" \
+              -X POST -H "Content-Type: application/json" \
+              -d '{}' http://127.0.0.1:8882/v1/hello || true)
+            if [ "$code" = "200" ]; then
+              cat /tmp/headtts-health.txt
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/headtts-node.log
+          exit 1
+
+      - name: Run real Kokoro inference and render a talking-character MP4
+        working-directory: ai-anime-studio
+        env:
+          HEADTTS_URL: http://127.0.0.1:8882
+          HEADTTS_SMOKE_OUTPUT_DIR: ${{ github.workspace }}/ai-anime-studio/outputs/headtts-cpu-smoke
+        run: python -m pytest -q -s tests/test_headtts_live_integration.py
+
+      - name: Upload real TTS and MP4 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: headtts-cpu-dialogue-evidence
+          path: |
+            ai-anime-studio/outputs/headtts-cpu-smoke/
+            /tmp/headtts-node.log
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Stop HeadTTS service
+        if: always()
+        run: |
+          if [ -f /tmp/headtts-node.pid ]; then
+            kill "$(cat /tmp/headtts-node.pid)" || true
+          fi
