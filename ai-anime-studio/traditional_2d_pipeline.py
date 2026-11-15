@@ -74,6 +74,22 @@ def load_manifest(path: Path) -> tuple[dict[str, Any], dict[str, list[Image.Imag
         sheet_path = resolve_path(manifest_path.parent, str(raw["sheet"]))
         assert sheet_path is not None
         character_poses[str(name)] = load_pose_sheet(sheet_path)
+        mouth_sheet = resolve_path(manifest_path.parent, raw.get("mouth_sheet"))
+        if raw.get("mouth_sheet") and (mouth_sheet is None or not mouth_sheet.is_file()):
+            raise FileNotFoundError(f"Mouth sheet missing for '{name}': {mouth_sheet}")
+        if mouth_sheet:
+            anchor = raw.get("mouth_anchor", [0.5, 0.42])
+            if not isinstance(anchor, list) or len(anchor) != 2:
+                raise ValueError(f"mouth_anchor for '{name}' must be [x, y] normalized coordinates.")
+            anchor = [float(anchor[0]), float(anchor[1])]
+            if not all(math.isfinite(v) and 0.0 <= v <= 1.0 for v in anchor):
+                raise ValueError(f"mouth_anchor for '{name}' must contain values from 0 to 1.")
+            mouth_width = float(raw.get("mouth_width", 0.16))
+            if not math.isfinite(mouth_width) or not 0.02 <= mouth_width <= 0.6:
+                raise ValueError(f"mouth_width for '{name}' must be from 0.02 to 0.6.")
+            raw["_mouth_sheet_path"] = mouth_sheet
+            raw["_mouth_anchor"] = anchor
+            raw["_mouth_width"] = mouth_width
 
     normalized_scenes: list[dict[str, Any]] = []
     scene_ids: set[str] = set()
@@ -133,8 +149,62 @@ def load_manifest(path: Path) -> tuple[dict[str, Any], dict[str, list[Image.Imag
             cycle_fps = float(actor.get("cycle_fps", 0))
             if not math.isfinite(cycle_fps) or not 0 <= cycle_fps <= 30:
                 raise ValueError(f"cycle_fps must be 0 to 30 for '{char}'.")
+        dialogue = raw_scene.get("dialogue", [])
+        if not isinstance(dialogue, list):
+            raise ValueError(f"Scene '{sid}' dialogue must be an array.")
+        normalized_dialogue: list[dict[str, Any]] = []
+        for line_index, line in enumerate(dialogue):
+            if not isinstance(line, dict):
+                raise ValueError(f"Dialogue {line_index} in '{sid}' must be an object.")
+            speaker = str(line.get("character", ""))
+            if speaker not in character_poses:
+                raise ValueError(f"Dialogue in '{sid}' references unknown character '{speaker}'.")
+            if not character_defs[speaker].get("_mouth_sheet_path"):
+                raise ValueError(f"Character '{speaker}' needs mouth_sheet to use dialogue lip-sync.")
+            audio_path = resolve_path(manifest_path.parent, line.get("audio"))
+            viseme_path = resolve_path(manifest_path.parent, line.get("visemes"))
+            if audio_path is None or not audio_path.is_file():
+                raise FileNotFoundError(f"Dialogue audio missing in '{sid}': {audio_path}")
+            if viseme_path is None or not viseme_path.is_file():
+                raise FileNotFoundError(f"Dialogue viseme JSON missing in '{sid}': {viseme_path}")
+            timeline = json.loads(viseme_path.read_text(encoding="utf-8"))
+            events = timeline.get("visemes") if isinstance(timeline, dict) else None
+            if not isinstance(events, list):
+                raise ValueError(f"Viseme JSON for '{sid}' must contain a visemes array.")
+            checked_events: list[dict[str, Any]] = []
+            for event in events:
+                if not isinstance(event, dict):
+                    raise ValueError(f"Malformed viseme event in '{sid}'.")
+                start = float(event.get("start", -1))
+                event_duration = float(event.get("duration", -1))
+                mouth_index = int(event.get("mouth_index", -1))
+                if (not math.isfinite(start) or not math.isfinite(event_duration)
+                        or start < 0 or event_duration < 0 or mouth_index not in range(4)):
+                    raise ValueError(f"Invalid viseme timing or mouth_index in '{sid}'.")
+                checked_events.append({**event, "start": start, "duration": event_duration,
+                                        "mouth_index": mouth_index})
+            line_start = float(line.get("start", 0))
+            volume = float(line.get("volume", 1.0))
+            if not math.isfinite(line_start) or not 0 <= line_start < duration:
+                raise ValueError(f"Dialogue start for '{sid}' must be within the scene.")
+            if not math.isfinite(volume) or not 0 <= volume <= 2:
+                raise ValueError(f"Dialogue volume for '{sid}' must be from 0 to 2.")
+            line_duration = float(timeline.get("duration_seconds", max(
+                (event["start"] + event["duration"] for event in checked_events), default=0.0
+            )))
+            if not math.isfinite(line_duration) or line_duration <= 0:
+                raise ValueError(f"Dialogue timeline duration for '{sid}' must be positive.")
+            if line_start + line_duration > duration + 0.15:
+                raise ValueError(f"Dialogue for '{sid}' extends beyond the scene duration.")
+            checked_events.sort(key=lambda event: event["start"])
+            normalized_dialogue.append({
+                **line, "character": speaker, "audio_path": audio_path,
+                "visemes_data": checked_events, "duration": line_duration,
+                "start": line_start, "volume": volume,
+            })
         normalized_scenes.append({**raw_scene, "id": sid, "duration": duration,
-                                  "background_image_path": bg_path, "actors": actors})
+                                  "background_image_path": bg_path, "actors": actors,
+                                  "dialogue": normalized_dialogue})
     data["width"], data["height"], data["fps"] = width, height, fps
     return data, character_poses, normalized_scenes
 
@@ -216,6 +286,44 @@ def paste_actor(canvas: Image.Image, sprite: Image.Image, x: float, baseline_y: 
     canvas.paste(canvas_rgba.convert("RGB"))
 
 
+def sample_mouth_pose(events: list[dict[str, Any]], local_t: float) -> int:
+    """Return the four-shape mouth index active at a local dialogue timestamp."""
+    if local_t < 0:
+        return 0
+    for event in reversed(events):
+        start = float(event["start"])
+        if start <= local_t < start + float(event["duration"]):
+            return int(event["mouth_index"])
+    return 0
+
+
+def paste_mouth(canvas: Image.Image, mouth: Image.Image, base_sprite: Image.Image,
+                x: float, baseline_y: float, desired_height: float, rotation: float,
+                anchor: list[float], width_fraction: float) -> None:
+    """Overlay one transparent mouth pose at a normalized point on the character."""
+    body_ratio = desired_height / max(1, base_sprite.height)
+    body_width = base_sprite.width * body_ratio
+    center_x = x + (float(anchor[0]) - 0.5) * body_width
+    center_y = baseline_y - desired_height + float(anchor[1]) * desired_height
+    if abs(rotation) > 0.01:
+        pivot_y = baseline_y - desired_height / 2
+        dx, dy = center_x - x, center_y - pivot_y
+        angle = math.radians(rotation)
+        center_x = x + math.cos(angle) * dx + math.sin(angle) * dy
+        center_y = pivot_y - math.sin(angle) * dx + math.cos(angle) * dy
+    target_width = max(2, int(round(desired_height * width_fraction)))
+    target_height = max(2, int(round(target_width * mouth.height / max(1, mouth.width))))
+    rendered = mouth.resize((target_width, target_height), Image.Resampling.LANCZOS)
+    if abs(rotation) > 0.01:
+        rendered = rendered.rotate(rotation, resample=Image.Resampling.BICUBIC, expand=True)
+    px, py = int(round(center_x - rendered.width / 2)), int(round(center_y - rendered.height / 2))
+    layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+    layer.alpha_composite(rendered, (px, py))
+    canvas_rgba = canvas.convert("RGBA")
+    canvas_rgba.alpha_composite(layer)
+    canvas.paste(canvas_rgba.convert("RGB"))
+
+
 def draw_caption(canvas: Image.Image, caption: str) -> None:
     if not caption:
         return
@@ -243,6 +351,21 @@ def render_manifest(manifest_path: Path, output_path: Path, *, music_path: Path 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     ffmpeg = get_ffmpeg_exe()
     silent_path = output_path.with_name(output_path.stem + "_silent.mp4")
+    character_defs = data["characters"]
+    mouth_poses = {
+        name: load_pose_sheet(raw["_mouth_sheet_path"])
+        for name, raw in character_defs.items() if raw.get("_mouth_sheet_path")
+    }
+    voice_tracks: list[tuple[Path, float, float]] = []
+    scene_offsets: list[float] = []
+    running_offset = 0.0
+    for scene in scenes:
+        scene_offsets.append(running_offset)
+        for line in scene["dialogue"]:
+            voice_tracks.append((line["audio_path"], running_offset + line["start"], line["volume"]))
+        running_offset += scene["duration"]
+    total_duration = running_offset
+
     frame_count = 0
     writer = imageio.get_writer(str(silent_path), fps=fps, codec="libx264", quality=8,
                                 pixelformat="yuv420p", macro_block_size=1)
@@ -254,11 +377,29 @@ def render_manifest(manifest_path: Path, output_path: Path, *, music_path: Path 
                 local_t = frame_index / fps
                 canvas = draw_background(scene, width, height)
                 for actor in scene["actors"]:
+                    character = str(actor["character"])
                     transform = sample_actor(actor, local_t)
-                    sprite = poses[str(actor["character"])][int(transform["pose"])]
+                    sprite = poses[character][int(transform["pose"])]
                     desired_height = float(actor.get("height", 240)) * transform["scale"]
                     paste_actor(canvas, sprite, transform["x"], transform["y"],
                                 desired_height, transform["rotation"])
+                    if character in mouth_poses:
+                        active_lines = [
+                            line for line in scene["dialogue"]
+                            if line["character"] == character
+                            and line["start"] <= local_t < line["start"] + line["duration"]
+                        ]
+                        if active_lines:
+                            line = max(active_lines, key=lambda item: item["start"])
+                            speaking_t = local_t - line["start"]
+                            mouth_index = sample_mouth_pose(line["visemes_data"], speaking_t)
+                            mouth = mouth_poses[character][mouth_index]
+                            character_meta = character_defs[character]
+                            paste_mouth(
+                                canvas, mouth, sprite, transform["x"], transform["y"],
+                                desired_height, transform["rotation"],
+                                character_meta["_mouth_anchor"], character_meta["_mouth_width"],
+                            )
                 draw_caption(canvas, str(scene.get("caption", "")))
                 writer.append_data(np.asarray(canvas))
                 frame_count += 1
@@ -266,18 +407,40 @@ def render_manifest(manifest_path: Path, output_path: Path, *, music_path: Path 
         writer.close()
     if frame_count == 0 or not silent_path.is_file() or silent_path.stat().st_size < 2048:
         raise RuntimeError("No video frames were rendered.")
-    if music_path:
-        if not music_path.is_file():
-            raise FileNotFoundError(f"Music track not found: {music_path}")
-        result = subprocess.run(
-            [ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", str(silent_path),
-             "-stream_loop", "-1", "-i", str(music_path), "-map", "0:v:0", "-map", "1:a:0",
-             "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-shortest",
-             "-movflags", "+faststart", str(output_path)],
-            capture_output=True, text=True,
+
+    if music_path and not music_path.is_file():
+        raise FileNotFoundError(f"Music track not found: {music_path}")
+    if voice_tracks or music_path:
+        cmd = [ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", str(silent_path)]
+        filters: list[str] = []
+        audio_labels: list[str] = []
+        for index, (audio_path, offset, volume) in enumerate(voice_tracks):
+            input_index = index + 1
+            cmd += ["-i", str(audio_path)]
+            delay_ms = max(0, int(round(offset * 1000)))
+            label = f"voice{index}"
+            filters.append(f"[{input_index}:a]adelay={delay_ms}|{delay_ms},volume={volume:.3f}[{label}]")
+            audio_labels.append(f"[{label}]")
+        if music_path:
+            music_index = len(voice_tracks) + 1
+            cmd += ["-stream_loop", "-1", "-i", str(music_path)]
+            filters.append(
+                f"[{music_index}:a]atrim=0:{total_duration:.3f},asetpts=PTS-STARTPTS,"
+                f"volume={0.16 if voice_tracks else 0.75:.3f}[music]"
+            )
+            audio_labels.append("[music]")
+        filters.append(
+            "".join(audio_labels)
+            + f"amix=inputs={len(audio_labels)}:duration=longest:dropout_transition=2:normalize=1[aout]"
         )
+        cmd += [
+            "-filter_complex", ";".join(filters), "-map", "0:v:0", "-map", "[aout]",
+            "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-t", f"{total_duration:.3f}",
+            "-movflags", "+faststart", str(output_path),
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode:
-            raise RuntimeError(f"FFmpeg audio mux failed: {result.stderr[-2000:]}")
+            raise RuntimeError(f"FFmpeg dialogue/music mix failed: {result.stderr[-2500:]}")
         silent_path.unlink(missing_ok=True)
     else:
         silent_path.replace(output_path)
