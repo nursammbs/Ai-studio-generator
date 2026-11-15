@@ -1,14 +1,21 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import re
 import shutil
+import subprocess
 import tempfile
 import time
 import unittest
 import urllib.request
+
+import numpy as np
+from PIL import Image
 from pathlib import Path
+
+from reframing import detect_subject_center
 
 from core import (
     extract_audio,
@@ -114,11 +121,96 @@ class RealVideoSmokeTests(unittest.TestCase):
             chosen = candidates[0]
             write_srt(words, chosen.start, chosen.end, subtitle)
             self.assertTrue(subtitle.read_text(encoding="utf-8").strip())
-            render_clip(source, chosen, subtitle, output)
+            subject_center = detect_subject_center(source, chosen.start, chosen.end)
+            self.assertIsNotNone(subject_center, "The real interview should provide a detectable face for portrait framing")
+            render_clip(source, chosen, subtitle, output, framing="subject_focus", subject_center=subject_center)
             rendered = validate_rendered_clip(output, chosen.end - chosen.start)
             self.assertTrue(rendered["has_video"] and rendered["has_audio"])
             video_stream = next(stream for stream in rendered["streams"] if stream["codec_type"] == "video")
+            audio_stream = next(stream for stream in rendered["streams"] if stream["codec_type"] == "audio")
             self.assertAlmostEqual(video_stream["width"] / video_stream["height"], 9 / 16, delta=0.01)
+            self.assertEqual(video_stream.get("codec_name"), "h264")
+            self.assertEqual(audio_stream.get("codec_name"), "aac")
+
+            # Preserve a real NASA interview render in CI so a human can inspect the
+            # actual selected segment, captions, framing and encoded audio/video.
+            if os.environ.get("GITHUB_ACTIONS") == "true":
+                review_dir = Path(__file__).resolve().parents[1] / "outputs" / "ci-quality" / "real-video-review"
+                review_dir.mkdir(parents=True, exist_ok=True)
+                review_video = review_dir / "nasa-selected-clip.mp4"
+                review_srt = review_dir / "nasa-selected-clip.srt"
+                review_frame = review_dir / "nasa-review-frame.jpg"
+                baseline_frame = review_dir / "nasa-caption-baseline-frame.jpg"
+                shutil.copy2(output, review_video)
+                shutil.copy2(subtitle, review_srt)
+                sample_time = min(3.0, max(0.5, (chosen.end - chosen.start) / 2))
+                subprocess.run([
+                    "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+                    "-ss", f"{sample_time:.3f}", "-i", str(review_video),
+                    "-frames:v", "1", str(review_frame),
+                ], check=True, capture_output=True, timeout=30)
+
+                # Compare the rendered frame with the same source frame after portrait
+                # cropping but without captions. This verifies that timed SRT captions
+                # are actually burned into the lower caption-safe area on real WebM.
+                center_x, center_y = subject_center
+                baseline_filter = (
+                    "scale=1080:1920:force_original_aspect_ratio=increase,"
+                    f"crop=1080:1920:min(max(iw*{center_x:.5f}-540\\,0)\\,iw-1080):"
+                    f"min(max(ih*{center_y:.5f}-960\\,0)\\,ih-1920)"
+                )
+                subprocess.run([
+                    "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+                    "-ss", f"{chosen.start:.3f}", "-i", str(source),
+                    "-ss", f"{sample_time:.3f}", "-vf", baseline_filter,
+                    "-frames:v", "1", str(baseline_frame),
+                ], check=True, capture_output=True, timeout=30)
+                rendered_pixels = np.asarray(Image.open(review_frame).convert("RGB"), dtype=np.int16)
+                baseline_pixels = np.asarray(Image.open(baseline_frame).convert("RGB"), dtype=np.int16)
+                self.assertEqual(rendered_pixels.shape, baseline_pixels.shape)
+                lower_region = slice(int(rendered_pixels.shape[0] * 0.68), int(rendered_pixels.shape[0] * 0.95))
+                pixel_delta = np.abs(rendered_pixels[lower_region] - baseline_pixels[lower_region])
+                caption_pixel_fraction = float(np.mean(np.max(pixel_delta, axis=2) > 40))
+                self.assertGreater(
+                    caption_pixel_fraction, 0.005,
+                    "No visible caption pixels were detected in the lower caption-safe area; check seek timestamps and SRT burn-in.",
+                )
+                (review_dir / "nasa-review-report.json").write_text(json.dumps({
+                    "status": "PASS",
+                    "source": "NASA GSFC Sarah Jones interview",
+                    "source_duration_seconds": round(source_media["duration"], 3),
+                    "transcribed_word_count": len(words),
+                    "transcription_seconds": round(inference_seconds, 3),
+                    "word_error_rate": round(wer, 4),
+                    "selected_clip": {
+                        "start_seconds": round(chosen.start, 3),
+                        "end_seconds": round(chosen.end, 3),
+                        "duration_seconds": round(chosen.end - chosen.start, 3),
+                        "score": chosen.score,
+                        "text": chosen.text,
+                        "reasons": chosen.reasons,
+                    },
+                    "framing": {
+                        "mode": "subject_focus",
+                        "detected_face_center": list(subject_center),
+                    },
+                    "caption_render_check": {
+                        "lower_region_changed_pixel_fraction": round(caption_pixel_fraction, 5),
+                        "threshold": 0.005,
+                        "status": "PASS",
+                    },
+                    "render": {
+                        "width": video_stream["width"],
+                        "height": video_stream["height"],
+                        "video_codec": video_stream.get("codec_name"),
+                        "audio_codec": audio_stream.get("codec_name"),
+                        "duration_seconds": round(rendered["duration"], 3),
+                        "file_size_bytes": review_video.stat().st_size,
+                    },
+                    "files": [review_video.name, review_srt.name, review_frame.name],
+                    "review_note": "Automated checks validate transcription and technical rendering. Human review is still required for editorial quality and subtitle readability."
+                }, indent=2), encoding="utf-8")
+                self.assertGreater(review_frame.stat().st_size, 1_000)
 
 
 if __name__ == "__main__":

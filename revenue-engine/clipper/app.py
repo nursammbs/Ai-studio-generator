@@ -360,9 +360,9 @@ with st.sidebar:
     min_seconds = st.slider("Suggested clip minimum", 15, 45, 25)
     max_seconds = st.slider("Suggested clip maximum", 30, 90, 60)
     max_clips = st.slider("Maximum suggestions", 3, 20, 10)
-    caption_font_size = st.slider("Caption size", 32, 62, 46)
+    caption_font_size = st.slider("Caption size", 10, 22, 14)
     caption_position = st.selectbox("Caption position", ["Lower", "Middle", "Higher"], index=0)
-    caption_margin_v = {"Lower": 160, "Middle": 250, "Higher": 360}[caption_position]
+    caption_margin_v = {"Lower": 16, "Middle": 28, "Higher": 40}[caption_position]
     framing_label = st.selectbox(
         "Vertical framing", ["Center crop", "Fit with black bars", "Subject-focused crop (OpenCV)"], index=0,
     )
@@ -553,7 +553,7 @@ if active_job:
         with st.expander("Edit transcript text", expanded=False):
             edited_transcript = st.text_area(
                 "Correct words while preserving existing timestamps where possible",
-                value=" ".join(word.text for word in transcript_words),
+                value=transcript_excerpt(transcript_words, 0.0, max((word.end for word in transcript_words), default=0.0)),
                 height=220,
                 key=f"transcript_editor_{job['id']}",
             )

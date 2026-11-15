@@ -71,6 +71,22 @@ class ClipperCoreTests(unittest.TestCase):
         self.assertIn("I really learned something\nimportant today.", content)
         self.assertEqual(content.count("-->"), 1)
 
+    def test_srt_normalizes_spaces_before_punctuation(self):
+        words = [
+            Word("Gold", 0.0, 0.3),
+            Word("will", 0.3, 0.5),
+            Word("be", 0.5, 0.7),
+            Word("sitting", 0.7, 1.0),
+            Word("22", 1.0, 1.2),
+            Word(",000", 1.2, 1.4),
+            Word("miles.", 1.4, 1.8),
+        ]
+        with tempfile.TemporaryDirectory() as folder:
+            target = write_srt(words, 0, 2, Path(folder) / "clip.srt")
+            content = target.read_text(encoding="utf-8")
+        self.assertIn("Gold will be sitting 22,000 miles.", " ".join(content.split()))
+        self.assertNotIn("22 ,000", content)
+
     def test_srt_clips_word_timing_at_clip_boundaries(self):
         words = [Word("Before", 0, 0.5), Word("inside", 0.5, 1.0), Word("After", 1.0, 1.5)]
         with tempfile.TemporaryDirectory() as folder:

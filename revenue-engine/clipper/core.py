@@ -61,7 +61,7 @@ def probe_media(path: str | Path) -> dict:
 
     result = run_checked([
         "ffprobe", "-v", "error", "-show_entries",
-        "format=duration,format_name:stream=codec_type,width,height,sample_rate",
+        "format=duration,format_name:stream=codec_type,codec_name,width,height,sample_rate",
         "-of", "json", str(source),
     ], timeout=60)
     payload = json.loads(result.stdout)
@@ -218,8 +218,15 @@ def suggest_candidates(
     return sorted(selected, key=lambda candidate: candidate.start)
 
 
+def _normalize_punctuation_spacing(text: str) -> str:
+    """Attach punctuation to the preceding token for clean transcript and SRT output."""
+    return re.sub(r"\s+([,.;:!?])", r"\1", text).strip()
+
+
 def transcript_excerpt(words: Iterable[Word], start: float, end: float) -> str:
-    return " ".join(word.text for word in words if word.end > start and word.start < end).strip()
+    return _normalize_punctuation_spacing(
+        " ".join(word.text for word in words if word.end > start and word.start < end)
+    )
 
 
 def word_error_rate(reference: str, hypothesis: str) -> float:
@@ -308,7 +315,7 @@ def _wrap_caption(words: list[str], max_chars: int = 34) -> str:
             current = candidate
     if current:
         lines.append(current)
-    return "\n".join(lines)
+    return _normalize_punctuation_spacing("\n".join(lines))
 
 
 def _caption_cues(
@@ -388,7 +395,7 @@ def validate_rendered_clip(path: str | Path, expected_duration: float | None = N
 def render_clip(
     video_path: str | Path, candidate: Candidate, subtitle_path: str | Path,
     output_path: str | Path, width: int = 1080, height: int = 1920,
-    caption_font_size: int = 46, caption_margin_v: int = 250,
+    caption_font_size: int = 14, caption_margin_v: int = 24,
     framing: str = "center_crop", transition: str = "none",
     subject_center: tuple[float, float] | None = None,
 ) -> Path:
@@ -396,7 +403,7 @@ def render_clip(
         raise ValueError("Output dimensions must be positive")
     if candidate.start < 0 or candidate.end <= candidate.start:
         raise ValueError("Clip start/end range is invalid")
-    if not 24 <= caption_font_size <= 96 or not 80 <= caption_margin_v <= 500:
+    if not 8 <= caption_font_size <= 32 or not 8 <= caption_margin_v <= 60:
         raise ValueError("Caption size or position is outside the supported range")
     if framing not in {"center_crop", "fit", "subject_focus"}:
         raise ValueError("Framing must be center_crop, fit or subject_focus")
@@ -430,26 +437,28 @@ def render_clip(
             center_x, center_y = (min(max(float(value), 0.0), 1.0) for value in subject_center)
             framing_filter = (
                 f"scale={width}:{height}:force_original_aspect_ratio=increase,"
-                f"crop={width}:{height}:min(max(iw*{center_x:.5f}-{width}/2,0),iw-{width}):"
-                f"min(max(ih*{center_y:.5f}-{height}/2,0),ih-{height})"
+                f"crop={width}:{height}:min(max(iw*{center_x:.5f}-{width}/2\\,0)\\,iw-{width}):"
+                f"min(max(ih*{center_y:.5f}-{height}/2\\,0)\\,ih-{height})"
             )
     else:
         framing_filter = f"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height}"
+    # Reset timestamps before subtitle rendering: some WebM sources retain a
+    # non-zero seek timestamp, which otherwise shifts SRT cues out of the clip.
     video_filter = (
-        f"{framing_filter},subtitles='{subtitle}':force_style='FontName=Arial,"
-        f"FontSize={caption_font_size},Outline=4,Shadow=1,Alignment=2,MarginV={caption_margin_v}'"
+        f"setpts=PTS-STARTPTS,{framing_filter},subtitles='{subtitle}':force_style='FontName=Arial,"
+        f"FontSize={caption_font_size},Outline=2,Shadow=1,Alignment=2,MarginV={caption_margin_v}'"
     )
     clip_duration = candidate.end - candidate.start
     fade_duration = min(0.35, clip_duration / 6)
-    audio_filter = None
+    audio_filter = "asetpts=PTS-STARTPTS"
     if transition == "fade":
         video_filter += (
             f",fade=t=in:st=0:d={fade_duration:.3f}"
             f",fade=t=out:st={clip_duration - fade_duration:.3f}:d={fade_duration:.3f}"
         )
-        audio_filter = (
-            f"afade=t=in:st=0:d={fade_duration:.3f},"
-            f"afade=t=out:st={clip_duration - fade_duration:.3f}:d={fade_duration:.3f}"
+        audio_filter += (
+            f",afade=t=in:st=0:d={fade_duration:.3f}"
+            f",afade=t=out:st={clip_duration - fade_duration:.3f}:d={fade_duration:.3f}"
         )
     try:
         command = [
