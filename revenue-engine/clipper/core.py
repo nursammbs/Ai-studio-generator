@@ -318,42 +318,120 @@ def _wrap_caption(words: list[str], max_chars: int = 34) -> str:
     return _normalize_punctuation_spacing("\n".join(lines))
 
 
+_WEAK_CAPTION_ENDINGS = {
+    "a", "an", "and", "are", "as", "at", "be", "because", "but", "by",
+    "can", "could", "for", "from", "has", "have", "he", "her", "his",
+    "how", "i", "if", "in", "is", "it", "of", "on", "or", "our",
+    "she", "that", "the", "their", "them", "there", "these", "they",
+    "this", "those", "to", "was", "we", "were", "what", "when",
+    "where", "which", "who", "will", "with", "would", "you", "your",
+    "able", "affects", "already", "also", "another", "better", "be", "directly",
+    "each", "even", "every", "few", "it", "just", "less", "many", "more",
+    "most", "much", "only", "other", "predict", "really", "some", "space",
+    "still", "such", "very", "whole",
+}
+_WEAK_CAPTION_STARTS = {
+    "a", "an", "as", "at", "because", "by", "for", "from", "if",
+    "in", "into", "is", "of", "on", "onto", "or", "that", "the",
+    "their", "them", "these", "this", "those", "to", "was", "were",
+    "which", "who", "with",
+    "able", "affects", "be", "day", "directly", "half", "it", "predict",
+    "space", "weather",
+}
+
+
+def _caption_token(text: str) -> str:
+    return re.sub(r"^[^\w']+|[^\w']+$", "", text.casefold())
+
+
+def _caption_segment_groups(segment: list[Word]) -> list[list[Word]]:
+    """Split one sentence/pause-bounded phrase on readable linguistic boundaries."""
+    if not segment:
+        return []
+
+    count = len(segment)
+    best_cost = [float("inf")] * (count + 1)
+    next_break = [count] * count
+    best_cost[count] = 0.0
+
+    for start in range(count - 1, -1, -1):
+        for stop in range(start + 1, min(count, start + 12) + 1):
+            span = segment[start:stop]
+            phrase = " ".join(word.text for word in span)
+            elapsed = span[-1].end - span[0].start
+            if len(phrase) > 76 and len(span) > 1:
+                break
+            if elapsed > 4.5 and len(span) > 1:
+                break
+
+            # Prefer roughly six spoken words, but prioritize complete phrases,
+            # punctuation and readable two-line width over a rigid word count.
+            score = 1.0 + (len(span) - 6) ** 2 * 0.12
+            score += max(0, len(phrase) - 46) * 0.025
+            score += max(0.0, elapsed - 2.6) * 0.30
+
+            if stop < count:
+                ending = _caption_token(span[-1].text)
+                following = _caption_token(segment[stop].text)
+                if ending in _WEAK_CAPTION_ENDINGS:
+                    score += 2.4
+                if following in _WEAK_CAPTION_STARTS:
+                    score += 1.1
+                if span[-1].text.rstrip().endswith((",", ";", ":")):
+                    score -= 1.8
+                elif _SENTENCE_END.search(span[-1].text):
+                    score -= 2.0
+            else:
+                score -= 0.35
+
+            total = score + best_cost[stop]
+            if total < best_cost[start]:
+                best_cost[start] = total
+                next_break[start] = stop
+
+    groups: list[list[Word]] = []
+    cursor = 0
+    while cursor < count:
+        stop = next_break[cursor]
+        if stop <= cursor:
+            stop = cursor + 1
+        groups.append(segment[cursor:stop])
+        cursor = stop
+    return groups
+
+
 def _caption_cues(
     words: list[Word], clip_start: float, clip_end: float, include_speaker_labels: bool = False,
 ) -> list[tuple[float, float, str]]:
     if clip_start < 0 or clip_end <= clip_start:
         raise ValueError("Clip start/end range is invalid")
     selected = [
-        Word(word.text, max(word.start, clip_start), min(word.end, clip_end))
+        Word(word.text, max(word.start, clip_start), min(word.end, clip_end), word.speaker)
         for word in words if word.end > clip_start and word.start < clip_end
     ]
     cues: list[tuple[float, float, str]] = []
-    group: list[Word] = []
+    segment: list[Word] = []
 
-    def flush() -> None:
-        if group:
+    def flush_segment() -> None:
+        if not segment:
+            return
+        for group in _caption_segment_groups(segment):
             text = _wrap_caption([word.text for word in group])
             if include_speaker_labels and group[0].speaker:
                 text = f"{group[0].speaker}: {text}"
             cues.append((group[0].start - clip_start, group[-1].end - clip_start, text))
-            group.clear()
+        segment.clear()
 
     for word in selected:
-        tentative = group + [word]
-        text = " ".join(item.text for item in tentative)
-        pause = word.start - group[-1].end if group else 0.0
-        terminal = bool(_SENTENCE_END.search(group[-1].text)) if group else False
-        elapsed = word.end - group[0].start if group else 0.0
-        if group and (
-            len(tentative) > 7 or len(text) > 64 or pause > 0.65
-            or elapsed > 3.2 or terminal
-            or word.speaker != group[0].speaker
-        ):
-            flush()
-        group.append(word)
-    flush()
+        pause = word.start - segment[-1].end if segment else 0.0
+        speaker_changed = bool(segment and word.speaker != segment[-1].speaker)
+        if segment and (pause > 0.65 or speaker_changed):
+            flush_segment()
+        segment.append(word)
+        if _SENTENCE_END.search(word.text):
+            flush_segment()
+    flush_segment()
     return cues
-
 
 def write_srt(
     words: Iterable[Word], clip_start: float, clip_end: float, target: str | Path,
