@@ -220,7 +220,7 @@ def suggest_candidates(
 
 def _normalize_punctuation_spacing(text: str) -> str:
     """Attach punctuation to the preceding token for clean transcript and SRT output."""
-    return re.sub(r"\\s+([,.;:!?])", r"\\1", text).strip()
+    return re.sub(r"\s+([,.;:!?])", r"\1", text).strip()
 
 
 def transcript_excerpt(words: Iterable[Word], start: float, end: float) -> str:
