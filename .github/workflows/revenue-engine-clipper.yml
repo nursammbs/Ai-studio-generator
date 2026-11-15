@@ -34,3 +34,13 @@ jobs:
       - name: Run unit, UI, media and transcription smoke tests
         working-directory: revenue-engine/clipper
         run: python -m unittest discover -s tests -v
+
+      - name: Upload rendered output quality evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: clipper-output-quality-evidence
+          path: |
+            revenue-engine/clipper/outputs/ci-quality/
+          if-no-files-found: warn
+          retention-days: 14
