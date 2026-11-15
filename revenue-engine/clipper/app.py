@@ -553,7 +553,7 @@ if active_job:
         with st.expander("Edit transcript text", expanded=False):
             edited_transcript = st.text_area(
                 "Correct words while preserving existing timestamps where possible",
-                value=" ".join(word.text for word in transcript_words),
+                value=transcript_excerpt(transcript_words, 0.0, max((word.end for word in transcript_words), default=0.0)),
                 height=220,
                 key=f"transcript_editor_{job['id']}",
             )
