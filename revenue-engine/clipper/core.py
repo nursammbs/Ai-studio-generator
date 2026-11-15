@@ -430,8 +430,8 @@ def render_clip(
             center_x, center_y = (min(max(float(value), 0.0), 1.0) for value in subject_center)
             framing_filter = (
                 f"scale={width}:{height}:force_original_aspect_ratio=increase,"
-                f"crop={width}:{height}:min(max(iw*{center_x:.5f}-{width}/2,0),iw-{width}):"
-                f"min(max(ih*{center_y:.5f}-{height}/2,0),ih-{height})"
+                f"crop={width}:{height}:min(max(iw*{center_x:.5f}-{width}/2\\,0)\\,iw-{width}):"
+                f"min(max(ih*{center_y:.5f}-{height}/2\\,0)\\,ih-{height})"
             )
     else:
         framing_filter = f"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height}"
