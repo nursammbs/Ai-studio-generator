@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import re
 import shutil
@@ -118,7 +119,54 @@ class RealVideoSmokeTests(unittest.TestCase):
             rendered = validate_rendered_clip(output, chosen.end - chosen.start)
             self.assertTrue(rendered["has_video"] and rendered["has_audio"])
             video_stream = next(stream for stream in rendered["streams"] if stream["codec_type"] == "video")
+            audio_stream = next(stream for stream in rendered["streams"] if stream["codec_type"] == "audio")
             self.assertAlmostEqual(video_stream["width"] / video_stream["height"], 9 / 16, delta=0.01)
+            self.assertEqual(video_stream.get("codec_name"), "h264")
+            self.assertEqual(audio_stream.get("codec_name"), "aac")
+
+            # Preserve a real NASA interview render in CI so a human can inspect the
+            # actual selected segment, captions, framing and encoded audio/video.
+            if os.environ.get("GITHUB_ACTIONS") == "true":
+                review_dir = Path(__file__).resolve().parents[1] / "outputs" / "ci-quality" / "real-video-review"
+                review_dir.mkdir(parents=True, exist_ok=True)
+                review_video = review_dir / "nasa-selected-clip.mp4"
+                review_srt = review_dir / "nasa-selected-clip.srt"
+                review_frame = review_dir / "nasa-review-frame.jpg"
+                shutil.copy2(output, review_video)
+                shutil.copy2(subtitle, review_srt)
+                sample_time = min(3.0, max(0.5, (chosen.end - chosen.start) / 2))
+                subprocess.run([
+                    "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+                    "-ss", f"{sample_time:.3f}", "-i", str(review_video),
+                    "-frames:v", "1", str(review_frame),
+                ], check=True, capture_output=True, timeout=30)
+                (review_dir / "nasa-review-report.json").write_text(json.dumps({
+                    "status": "PASS",
+                    "source": "NASA GSFC Sarah Jones interview",
+                    "source_duration_seconds": round(source_media["duration"], 3),
+                    "transcribed_word_count": len(words),
+                    "transcription_seconds": round(inference_seconds, 3),
+                    "word_error_rate": round(wer, 4),
+                    "selected_clip": {
+                        "start_seconds": round(chosen.start, 3),
+                        "end_seconds": round(chosen.end, 3),
+                        "duration_seconds": round(chosen.end - chosen.start, 3),
+                        "score": chosen.score,
+                        "text": chosen.text,
+                        "reasons": chosen.reasons,
+                    },
+                    "render": {
+                        "width": video_stream["width"],
+                        "height": video_stream["height"],
+                        "video_codec": video_stream.get("codec_name"),
+                        "audio_codec": audio_stream.get("codec_name"),
+                        "duration_seconds": round(rendered["duration"], 3),
+                        "file_size_bytes": review_video.stat().st_size,
+                    },
+                    "files": [review_video.name, review_srt.name, review_frame.name],
+                    "review_note": "Automated checks validate transcription and technical rendering. Human review is still required for editorial quality and subtitle readability."
+                }, indent=2), encoding="utf-8")
+                self.assertGreater(review_frame.stat().st_size, 1_000)
 
 
 if __name__ == "__main__":
