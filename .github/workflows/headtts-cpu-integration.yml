@@ -76,14 +76,18 @@ jobs:
           HEADTTS_SMOKE_OUTPUT_DIR: ${{ github.workspace }}/ai-anime-studio/outputs/headtts-cpu-smoke
         run: python -m pytest -q -s tests/test_headtts_live_integration.py
 
+      - name: Capture HeadTTS service log
+        if: always()
+        run: |
+          mkdir -p ai-anime-studio/outputs/headtts-cpu-smoke
+          cp /tmp/headtts-node.log ai-anime-studio/outputs/headtts-cpu-smoke/ 2>/dev/null || true
+
       - name: Upload real TTS and MP4 evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: headtts-cpu-dialogue-evidence
-          path: |
-            ai-anime-studio/outputs/headtts-cpu-smoke/
-            /tmp/headtts-node.log
+          path: ai-anime-studio/outputs/headtts-cpu-smoke/
           if-no-files-found: warn
           retention-days: 14
 
