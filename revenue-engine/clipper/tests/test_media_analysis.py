@@ -50,7 +50,7 @@ class MediaAnalysisTests(unittest.TestCase):
 
         fake = types.ModuleType("scenedetect")
         fake.ContentDetector = lambda threshold: ("content", threshold)
-        fake.detect = lambda path, detector, show_progress: [
+        fake.detect = lambda path, detector: [
             (Timecode(0), Timecode(3)), (Timecode(3), Timecode(8))
         ]
         with patch.dict(sys.modules, {"scenedetect": fake}):
