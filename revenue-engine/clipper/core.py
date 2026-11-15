@@ -388,7 +388,7 @@ def validate_rendered_clip(path: str | Path, expected_duration: float | None = N
 def render_clip(
     video_path: str | Path, candidate: Candidate, subtitle_path: str | Path,
     output_path: str | Path, width: int = 1080, height: int = 1920,
-    caption_font_size: int = 46, caption_margin_v: int = 250,
+    caption_font_size: int = 14, caption_margin_v: int = 24,
     framing: str = "center_crop", transition: str = "none",
     subject_center: tuple[float, float] | None = None,
 ) -> Path:
@@ -396,7 +396,7 @@ def render_clip(
         raise ValueError("Output dimensions must be positive")
     if candidate.start < 0 or candidate.end <= candidate.start:
         raise ValueError("Clip start/end range is invalid")
-    if not 24 <= caption_font_size <= 96 or not 80 <= caption_margin_v <= 500:
+    if not 8 <= caption_font_size <= 32 or not 8 <= caption_margin_v <= 60:
         raise ValueError("Caption size or position is outside the supported range")
     if framing not in {"center_crop", "fit", "subject_focus"}:
         raise ValueError("Framing must be center_crop, fit or subject_focus")
