@@ -156,8 +156,8 @@ class RealVideoSmokeTests(unittest.TestCase):
                 center_x, center_y = subject_center
                 baseline_filter = (
                     "scale=1080:1920:force_original_aspect_ratio=increase,"
-                    f"crop=1080:1920:min(max(iw*{center_x:.5f}-540\\\\,0)\\\\,iw-1080):"
-                    f"min(max(ih*{center_y:.5f}-960\\\\,0)\\\\,ih-1920)"
+                    f"crop=1080:1920:min(max(iw*{center_x:.5f}-540\\,0)\\,iw-1080):"
+                    f"min(max(ih*{center_y:.5f}-960\\,0)\\,ih-1920)"
                 )
                 subprocess.run([
                     "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
