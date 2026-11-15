@@ -189,9 +189,18 @@ def load_manifest(path: Path) -> tuple[dict[str, Any], dict[str, list[Image.Imag
                 raise ValueError(f"Dialogue start for '{sid}' must be within the scene.")
             if not math.isfinite(volume) or not 0 <= volume <= 2:
                 raise ValueError(f"Dialogue volume for '{sid}' must be from 0 to 2.")
+            line_duration = float(timeline.get("duration_seconds", max(
+                (event["start"] + event["duration"] for event in checked_events), default=0.0
+            )))
+            if not math.isfinite(line_duration) or line_duration <= 0:
+                raise ValueError(f"Dialogue timeline duration for '{sid}' must be positive.")
+            if line_start + line_duration > duration + 0.15:
+                raise ValueError(f"Dialogue for '{sid}' extends beyond the scene duration.")
+            checked_events.sort(key=lambda event: event["start"])
             normalized_dialogue.append({
                 **line, "character": speaker, "audio_path": audio_path,
-                "visemes_data": checked_events, "start": line_start, "volume": volume,
+                "visemes_data": checked_events, "duration": line_duration,
+                "start": line_start, "volume": volume,
             })
         normalized_scenes.append({**raw_scene, "id": sid, "duration": duration,
                                   "background_image_path": bg_path, "actors": actors,
@@ -375,13 +384,17 @@ def render_manifest(manifest_path: Path, output_path: Path, *, music_path: Path 
                     paste_actor(canvas, sprite, transform["x"], transform["y"],
                                 desired_height, transform["rotation"])
                     if character in mouth_poses:
-                        character_meta = character_defs[character]
-                        for line in scene["dialogue"]:
-                            if line["character"] != character:
-                                continue
+                        active_lines = [
+                            line for line in scene["dialogue"]
+                            if line["character"] == character
+                            and line["start"] <= local_t < line["start"] + line["duration"]
+                        ]
+                        if active_lines:
+                            line = max(active_lines, key=lambda item: item["start"])
                             speaking_t = local_t - line["start"]
                             mouth_index = sample_mouth_pose(line["visemes_data"], speaking_t)
                             mouth = mouth_poses[character][mouth_index]
+                            character_meta = character_defs[character]
                             paste_mouth(
                                 canvas, mouth, sprite, transform["x"], transform["y"],
                                 desired_height, transform["rotation"],
