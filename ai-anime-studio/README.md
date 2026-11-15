@@ -10,6 +10,93 @@ An experimental local-first pipeline combining **ComfyUI** (AI image generation)
 - Optional image-to-video mode accepts a second ComfyUI API workflow, uploads each generated still, runs a video workflow, downloads its video/GIF output, and concatenates clips into an MP4.
 - Automated tests cover workflow mutation, a mocked ComfyUI HTTP API, MP4 render/decode, and clip concatenation.
 
+## English dialogue and character lip-sync (HeadTTS + Kokoro)
+
+The traditional 2D renderer now supports timed English dialogue and a four-shape mouth overlay. Use the local HeadTTS REST server to generate both a WAV voice line and a JSON viseme timeline. Rendering remains CPU-based; HeadTTS CPU inference is also supported, although speed and memory use depend on the computer.
+
+### Start the English voice service
+
+1. Install Node.js 20 or newer.
+2. Clone and install HeadTTS separately (its source and model files are not copied into this repository):
+
+```bash
+git clone https://github.com/met4citizen/HeadTTS.git
+cd HeadTTS
+npm install
+```
+
+3. Start the local CPU server from the HeadTTS directory, pointing it to this repository's configuration file:
+
+```bash
+node ./modules/headtts-node.mjs --config /path/to/Ai-studio-generator/ai-anime-studio/headtts-node.cpu.json
+```
+
+The config listens on 127.0.0.1:8882, uses one CPU worker and the English `af_bella` / `am_fenrir` voices. It selects Q8 quantization as a memory/quality compromise. Change `dtype` to `fp32` when memory allows and maximum voice quality matters more than memory use. Keep this service on localhost; do not expose it to the public internet.
+
+### Generate dialogue audio and viseme timing
+
+From the `ai-anime-studio` directory:
+
+```bash
+python headtts_bridge.py \
+  --text "I thought this would be easy. I was very, very wrong!" \
+  --voice af_bella \
+  --language en-us \
+  --audio-out outputs/dialogue/hero_line.wav \
+  --timeline-out outputs/dialogue/hero_line.visemes.json
+```
+
+The REST endpoint accepts up to 500 characters per request. Split longer dialogue into separate lines/shots. The bridge validates the WAV and timestamp arrays and stores word/viseme timings in the JSON file. It does not silently synthesize audio when HeadTTS is unavailable.
+
+### Give a character a mouth sheet
+
+Add an additional transparent 2×2 PNG to the character definition. Its four cells represent, in order: **closed/rest, open, wide, round**. These are deliberately broad mouth groups mapped from HeadTTS's Oculus visemes; they are not phoneme-perfect animation. Position the mouth overlay relative to the trimmed character sprite using normalized coordinates from 0 to 1.
+
+```json
+{
+  "characters": {
+    "hero": {
+      "sheet": "assets/hero_poses.png",
+      "mouth_sheet": "assets/hero_mouths.png",
+      "mouth_anchor": [0.5, 0.68],
+      "mouth_width": 0.16
+    }
+  },
+  "scenes": [{
+    "id": "opening",
+    "duration": 8,
+    "background": "#dce8e8",
+    "actors": [{
+      "character": "hero",
+      "height": 360,
+      "keyframes": [{"t": 0, "x": 640, "y": 1040, "pose": 0}]
+    }],
+    "dialogue": [{
+      "character": "hero",
+      "audio": "outputs/dialogue/hero_line.wav",
+      "visemes": "outputs/dialogue/hero_line.visemes.json",
+      "start": 1.0,
+      "volume": 1.0
+    }]
+  }]
+}
+```
+
+The paths are relative to the manifest file. Each dialogue line must identify a character with a `mouth_sheet`, a WAV file, a matching HeadTTS viseme JSON file, and a start time within the scene. Multiple dialogue lines can be placed in different scenes; voice tracks are offset into the episode timeline and mixed with optional background music. Music is automatically reduced under dialogue.
+
+Render the manifest:
+
+```bash
+python traditional_2d_pipeline.py \
+  --manifest examples/english_episode.json \
+  --output outputs/english_episode.mp4 \
+  --music assets/original_score.wav
+```
+
+### Important quality boundary
+
+The renderer now places mouth shapes from actual HeadTTS timestamps and mixes the dialogue into the final MP4. It does not create new character drawings, facial expressions, eye blinks, or full-body animation. Mouth-sheet alignment depends on the artist's anchor/scale values and should be reviewed in the rendered frames. The four-shape mapping is a practical starter, not a substitute for phoneme-level hand animation. Review pronunciation, emotional delivery, timing, and character continuity before publishing.
+
 ## Limitations — please read
 This is a prototype, not an automatic anime studio. Storyboard mode animates camera movement over a generated triptych; ComfyUI mode generates **still images** and turns them into a pan/zoom animatic. Neither mode generates full frame-by-frame body animation. Reusing the same character description helps but does not guarantee character identity consistency. Stronger consistency requires a compatible reference-image workflow (for example IP-Adapter/ControlNet) configured and tested with your installed model.
 
