@@ -107,6 +107,8 @@ class HeadTTSClient:
                 raise HeadTTSError("HeadTTS returned a non-numeric viseme timestamp.") from exc
             if not math.isfinite(start) or not math.isfinite(length) or start < 0 or length < 0:
                 raise HeadTTSError("HeadTTS returned an invalid viseme timestamp.")
+            if start > duration + 0.1 or start + length > duration + 0.15:
+                raise HeadTTSError("HeadTTS viseme timing extends beyond the returned WAV duration.")
             key = str(name)
             visemes.append({
                 "start": round(start, 4),
