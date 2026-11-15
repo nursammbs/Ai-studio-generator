@@ -325,12 +325,18 @@ _WEAK_CAPTION_ENDINGS = {
     "she", "that", "the", "their", "them", "there", "these", "they",
     "this", "those", "to", "was", "we", "were", "what", "when",
     "where", "which", "who", "will", "with", "would", "you", "your",
+    "able", "affects", "already", "also", "another", "better", "be", "directly",
+    "each", "even", "every", "few", "it", "just", "less", "many", "more",
+    "most", "much", "only", "other", "predict", "really", "some", "space",
+    "still", "such", "very", "whole,
 }
 _WEAK_CAPTION_STARTS = {
     "a", "an", "as", "at", "because", "by", "for", "from", "if",
     "in", "into", "is", "of", "on", "onto", "or", "that", "the",
     "their", "them", "these", "this", "those", "to", "was", "were",
     "which", "who", "with",
+    "able", "affects", "be", "day", "directly", "half", "it", "predict",
+    "space", "weather",
 }
 
 
@@ -349,13 +355,13 @@ def _caption_segment_groups(segment: list[Word]) -> list[list[Word]]:
     best_cost[count] = 0.0
 
     for start in range(count - 1, -1, -1):
-        for stop in range(start + 1, min(count, start + 10) + 1):
+        for stop in range(start + 1, min(count, start + 12) + 1):
             span = segment[start:stop]
             phrase = " ".join(word.text for word in span)
             elapsed = span[-1].end - span[0].start
-            if len(phrase) > 68 and len(span) > 1:
+            if len(phrase) > 76 and len(span) > 1:
                 break
-            if elapsed > 3.8 and len(span) > 1:
+            if elapsed > 4.5 and len(span) > 1:
                 break
 
             # Prefer roughly six spoken words, but prioritize complete phrases,
