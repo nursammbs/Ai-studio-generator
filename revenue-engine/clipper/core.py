@@ -61,7 +61,7 @@ def probe_media(path: str | Path) -> dict:
 
     result = run_checked([
         "ffprobe", "-v", "error", "-show_entries",
-        "format=duration,format_name:stream=codec_type,width,height,sample_rate",
+        "format=duration,format_name:stream=codec_type,codec_name,width,height,sample_rate",
         "-of", "json", str(source),
     ], timeout=60)
     payload = json.loads(result.stdout)
