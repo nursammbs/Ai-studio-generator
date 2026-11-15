@@ -435,21 +435,23 @@ def render_clip(
             )
     else:
         framing_filter = f"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height}"
+    # Reset timestamps before subtitle rendering: some WebM sources retain a
+    # non-zero seek timestamp, which otherwise shifts SRT cues out of the clip.
     video_filter = (
-        f"{framing_filter},subtitles='{subtitle}':force_style='FontName=Arial,"
+        f"setpts=PTS-STARTPTS,{framing_filter},subtitles='{subtitle}':force_style='FontName=Arial,"
         f"FontSize={caption_font_size},Outline=4,Shadow=1,Alignment=2,MarginV={caption_margin_v}'"
     )
     clip_duration = candidate.end - candidate.start
     fade_duration = min(0.35, clip_duration / 6)
-    audio_filter = None
+    audio_filter = "asetpts=PTS-STARTPTS"
     if transition == "fade":
         video_filter += (
             f",fade=t=in:st=0:d={fade_duration:.3f}"
             f",fade=t=out:st={clip_duration - fade_duration:.3f}:d={fade_duration:.3f}"
         )
-        audio_filter = (
-            f"afade=t=in:st=0:d={fade_duration:.3f},"
-            f"afade=t=out:st={clip_duration - fade_duration:.3f}:d={fade_duration:.3f}"
+        audio_filter += (
+            f",afade=t=in:st=0:d={fade_duration:.3f}"
+            f",afade=t=out:st={clip_duration - fade_duration:.3f}:d={fade_duration:.3f}"
         )
     try:
         command = [
