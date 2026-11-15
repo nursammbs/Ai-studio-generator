@@ -218,8 +218,15 @@ def suggest_candidates(
     return sorted(selected, key=lambda candidate: candidate.start)
 
 
+def _normalize_punctuation_spacing(text: str) -> str:
+    """Attach punctuation to the preceding token for clean transcript and SRT output."""
+    return re.sub(r"\\s+([,.;:!?])", r"\\1", text).strip()
+
+
 def transcript_excerpt(words: Iterable[Word], start: float, end: float) -> str:
-    return " ".join(word.text for word in words if word.end > start and word.start < end).strip()
+    return _normalize_punctuation_spacing(
+        " ".join(word.text for word in words if word.end > start and word.start < end)
+    )
 
 
 def word_error_rate(reference: str, hypothesis: str) -> float:
@@ -308,7 +315,7 @@ def _wrap_caption(words: list[str], max_chars: int = 34) -> str:
             current = candidate
     if current:
         lines.append(current)
-    return "\n".join(lines)
+    return _normalize_punctuation_spacing("\n".join(lines))
 
 
 def _caption_cues(
@@ -439,7 +446,7 @@ def render_clip(
     # non-zero seek timestamp, which otherwise shifts SRT cues out of the clip.
     video_filter = (
         f"setpts=PTS-STARTPTS,{framing_filter},subtitles='{subtitle}':force_style='FontName=Arial,"
-        f"FontSize={caption_font_size},Outline=4,Shadow=1,Alignment=2,MarginV={caption_margin_v}'"
+        f"FontSize={caption_font_size},Outline=2,Shadow=1,Alignment=2,MarginV={caption_margin_v}'"
     )
     clip_duration = candidate.end - candidate.start
     fade_duration = min(0.35, clip_duration / 6)
