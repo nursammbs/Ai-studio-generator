@@ -34,6 +34,17 @@ def make_wav(path: Path) -> None:
         output.writeframes(b"\x00\x00" * 24000)
 
 
+def test_paste_mouth_places_transparent_overlay_at_normalized_anchor() -> None:
+    canvas = Image.new("RGB", (200, 200), (255, 255, 255))
+    base = Image.new("RGBA", (100, 100), (0, 0, 0, 0))
+    mouth = Image.new("RGBA", (20, 8), (220, 10, 20, 255))
+    pipeline.paste_mouth(
+        canvas, mouth, base, x=100, baseline_y=150, desired_height=100,
+        rotation=0, anchor=[0.5, 0.5], width_fraction=0.2,
+    )
+    assert canvas.getpixel((100, 100)) == (220, 10, 20)
+
+
 def test_sample_mouth_pose_uses_headtts_event_timing() -> None:
     events = [
         {"start": 0.0, "duration": 0.3, "mouth_index": 1},
