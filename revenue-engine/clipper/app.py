@@ -30,6 +30,7 @@ from core import (
 from jobs import JobStore
 from semantic_selection import suggest_semantic_candidates
 from diarization import attach_speakers, diarize_audio
+from media_analysis import detect_scenes, detect_silence, enrich_candidates_with_scenes, create_silence_trimmed_copy
 
 
 ROOT = Path(__file__).resolve().parent
@@ -111,6 +112,7 @@ def source_path(job: dict) -> Path:
 def run_analysis(
     job: dict, model_size: str, min_seconds: int, max_seconds: int, max_clips: int,
     selection_strategy: str = "Heuristic", enable_diarization: bool = False,
+    enable_scene_detection: bool = True, enable_silence_analysis: bool = True,
 ) -> dict:
     directory = job_dir(job)
     source = source_path(job)
@@ -153,15 +155,22 @@ def run_analysis(
         )
     else:
         job["metrics"].pop("transcript_wer", None)
-    job["stage"] = "candidate_selection"
+    job["stage"] = "media_intelligence"
     STORE.save(job)
+    scene_result = detect_scenes(source) if enable_scene_detection else {"available": False, "scenes": [], "message": "Disabled by user."}
+    silence_result = detect_silence(source) if enable_silence_analysis else {"available": False, "intervals": [], "message": "Disabled by user."}
+    job["scene_analysis"] = scene_result
+    job["silence_analysis"] = silence_result
     if selection_strategy == "Local semantic model":
         candidates = suggest_semantic_candidates(words, min_seconds, max_seconds, max_clips)
     else:
         candidates = suggest_candidates(words, min_seconds, max_seconds, max_clips)
     if not candidates:
         raise ValueError("No complete transcript segments matched the selected duration range.")
-    job["candidates"] = [candidate.__dict__ for candidate in candidates]
+    job["candidates"] = enrich_candidates_with_scenes(
+        [candidate.__dict__ for candidate in candidates],
+        scene_result.get("scenes", []), silence_result.get("intervals", []),
+    )
     job["selection_strategy"] = selection_strategy
     job["status"] = "ready_for_review"
     job["stage"] = "review"
@@ -370,7 +379,11 @@ with st.sidebar:
         help="Optional local model. Install requirements-ai.txt and accept pyannote model terms; HF_TOKEN is required.",
     )
     include_speaker_labels = st.checkbox("Label speakers in captions", value=False)
-    st.caption("Transcription uses CPU / int8. Model speed and memory use depend on your computer.")
+    enable_scene_detection = st.checkbox("Detect scene changes (PySceneDetect)", value=False,
+        help="Optional; install requirements-media.txt. CPU use depends on resolution and duration.")
+    enable_silence_analysis = st.checkbox("Analyze silence intervals (FFmpeg)", value=True,
+        help="Uses FFmpeg silencedetect; never changes the source video.")
+    st.caption("Transcription uses CPU / int8. Optional visual analysis may increase processing time.")
 
     saved_jobs = STORE.list(owner_id=owner_id)
     if saved_jobs:
@@ -438,6 +451,8 @@ if uploaded is not None and st.button("Analyze video", type="primary", use_conta
                     job, model_size, min_seconds, max_seconds, max_clips,
                     selection_strategy=selection_strategy,
                     enable_diarization=enable_diarization,
+                    enable_scene_detection=enable_scene_detection,
+                    enable_silence_analysis=enable_silence_analysis,
                 )
                 status.update(label="Transcript and clip suggestions are ready", state="complete")
             st.success(f"Analysis complete: {len(job['candidates'])} suggestions.")
@@ -499,6 +514,37 @@ if active_job:
         with st.expander("Source video preview", expanded=False):
             st.video(job["source_path"])
             st.caption(f"{job['media']['duration']:.1f}s · {job['media'].get('format_name', 'video')}")
+
+    if job.get("scene_analysis") or job.get("silence_analysis"):
+        with st.expander("Scene and audio analysis", expanded=False):
+            scene_data = job.get("scene_analysis", {})
+            silence_data = job.get("silence_analysis", {})
+            if scene_data.get("available"):
+                st.metric("Detected scenes", scene_data.get("count", len(scene_data.get("scenes", []))))
+                if scene_data.get("scenes"):
+                    st.dataframe(scene_data["scenes"], use_container_width=True, hide_index=True)
+            elif scene_data.get("message"):
+                st.caption(scene_data["message"])
+            if silence_data.get("available"):
+                st.metric("Silence intervals", len(silence_data.get("intervals", [])))
+                if silence_data.get("intervals"):
+                    st.dataframe(silence_data["intervals"], use_container_width=True, hide_index=True)
+            elif silence_data.get("message"):
+                st.caption(silence_data["message"])
+
+    if job.get("source_path") and Path(job["source_path"]).is_file():
+        if st.button("Create silence-trimmed review copy with Auto-Editor", key=f"auto_editor_{job['id']}"):
+            try:
+                cleaned = create_silence_trimmed_copy(job["source_path"], job_dir(job) / "auto-editor-review.mp4")
+                st.session_state[f"auto_editor_copy_{job['id']}"] = str(cleaned)
+                st.success("A separate silence-trimmed review copy was created. The original video is unchanged.")
+            except Exception as exc:
+                st.warning(str(exc))
+        review_copy = st.session_state.get(f"auto_editor_copy_{job['id']}")
+        if review_copy and Path(review_copy).is_file():
+            st.video(review_copy)
+            st.download_button("Download Auto-Editor review copy", Path(review_copy).read_bytes(),
+                file_name=f"{job['id']}-silence-trimmed.mp4", mime="video/mp4", key=f"download_auto_editor_{job['id']}")
 
     if job.get("transcript_path") and Path(job["transcript_path"]).is_file():
         transcript_words = load_transcript(job["transcript_path"])
