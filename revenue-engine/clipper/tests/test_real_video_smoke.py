@@ -12,6 +12,8 @@ import unittest
 import urllib.request
 from pathlib import Path
 
+from reframing import detect_subject_center
+
 from core import (
     extract_audio,
     render_clip,
@@ -116,7 +118,9 @@ class RealVideoSmokeTests(unittest.TestCase):
             chosen = candidates[0]
             write_srt(words, chosen.start, chosen.end, subtitle)
             self.assertTrue(subtitle.read_text(encoding="utf-8").strip())
-            render_clip(source, chosen, subtitle, output)
+            subject_center = detect_subject_center(source, chosen.start, chosen.end)
+            self.assertIsNotNone(subject_center, "The real interview should provide a detectable face for portrait framing")
+            render_clip(source, chosen, subtitle, output, framing="subject_focus", subject_center=subject_center)
             rendered = validate_rendered_clip(output, chosen.end - chosen.start)
             self.assertTrue(rendered["has_video"] and rendered["has_audio"])
             video_stream = next(stream for stream in rendered["streams"] if stream["codec_type"] == "video")
@@ -155,6 +159,10 @@ class RealVideoSmokeTests(unittest.TestCase):
                         "score": chosen.score,
                         "text": chosen.text,
                         "reasons": chosen.reasons,
+                    },
+                    "framing": {
+                        "mode": "subject_focus",
+                        "detected_face_center": list(subject_center),
                     },
                     "render": {
                         "width": video_stream["width"],
