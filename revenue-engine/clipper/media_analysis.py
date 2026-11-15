@@ -86,12 +86,12 @@ def enrich_candidates_with_scenes(candidates: list[dict], scenes: list[dict], si
 def create_silence_trimmed_copy(video_path: str | Path, output_path: str | Path,
                                 threshold: str = "0.04", margin: str = "0.2s") -> Path:
     """Run Auto-Editor as an optional separate review copy; source is never overwritten."""
-    executable = shutil.which("auto-editor")
-    if not executable:
-        raise RuntimeError("Auto-Editor is not installed. Install it separately with: pip install auto-editor")
     source, target = Path(video_path), Path(output_path)
     if source.resolve() == target.resolve():
         raise ValueError("Auto-Editor output must be a separate file; the original source is protected.")
+    executable = shutil.which("auto-editor")
+    if not executable:
+        raise RuntimeError("Auto-Editor is not installed. Install it separately with: pip install auto-editor")
     target.parent.mkdir(parents=True, exist_ok=True)
     command = [
         executable, str(source), "--edit", f"audio:threshold={threshold}",
