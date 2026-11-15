@@ -8,6 +8,9 @@ Local-first software for turning authorized long-form video into reviewed vertic
 - Check the source format, audio/video streams and duration with ffprobe.
 - Extract mono 16 kHz audio and transcribe locally with faster-whisper on CPU/int8.
 - Suggest transcript windows that begin and end on completed sentences, with a short explanation of the heuristic signals used.
+- Optionally detect visual scene changes with PySceneDetect and annotate clip suggestions with scene-change counts.
+- Analyze audio silence intervals using FFmpeg's built-in `silencedetect` filter; silence is flagged for review, never silently cut from the source.
+- Optionally create a separate silence-trimmed review copy with Auto-Editor; the original source is never overwritten.
 - Optionally rerank suggestions with a local sentence-embedding model for semantic editorial intent matching (`pip install -r requirements-ai.txt`).
 - Review and trim candidate boundaries in the table.
 - Correct transcript text while preserving existing word times where alignment permits.
@@ -26,7 +29,8 @@ Jobs and media are stored under outputs/<job-id>/. Delete a job folder to remove
 - FFmpeg and ffprobe on PATH; FFmpeg must include the subtitles/libass filter and libx264.
 - Enough free disk space for the source, extracted WAV, rendered clips and ZIP. WAV extraction uses about 115 MB per source hour before overhead.
 - CPU-only processing is supported. The base Whisper model is the default; larger models use more memory and take longer. First use downloads model weights; inference then runs locally.
-- Optional semantic/face/speaker models are in `requirements-ai.txt`; model weights download separately. pyannote requires a Hugging Face token and acceptance of its model conditions.
+- Optional semantic/face/speaker models are in `requirements-ai.txt`; model weights download separately.
+- Optional scene detection is in `requirements-media.txt`. Auto-Editor is installed separately with `pip install auto-editor`. pyannote requires a Hugging Face token and acceptance of its model conditions.
 
 The current upload limit is 2 GB and the source duration limit is 4 hours. Override with CLIPPER_MAX_UPLOAD_BYTES and CLIPPER_MAX_SOURCE_SECONDS if needed. Streamlit's upload limit must be set to at least the same size when raising the app limit.
 
@@ -41,6 +45,8 @@ From this directory in PowerShell:
     streamlit run app.py --server.maxUploadSize 2048
 
 To use the full 2 GB upload allowance, ensure Streamlit's server.maxUploadSize is set to 2048 MB. Install FFmpeg separately and confirm ffmpeg, ffprobe, and the subtitles filter are available.
+
+Optional visual analysis and Auto-Editor setup are described in [MEDIA_ANALYSIS.md](MEDIA_ANALYSIS.md).
 
 Run the unit checks and the FFmpeg smoke test with:
 
