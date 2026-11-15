@@ -23,6 +23,7 @@ def make_sheet(path: Path, mouth: bool = False) -> None:
             draw.ellipse((x0 + 38, y0 + 52, x0 + 90, y0 + 72), fill=color)
         else:
             draw.ellipse((x0 + 22, y0 + 12, x0 + 106, y0 + 116), fill=color)
+    image.save(path)
 
 
 def make_wav(path: Path) -> None:
