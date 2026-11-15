@@ -502,6 +502,8 @@ if active_job:
                         job, model_size, min_seconds, max_seconds, max_clips,
                         selection_strategy=selection_strategy,
                         enable_diarization=enable_diarization,
+                        enable_scene_detection=enable_scene_detection,
+                        enable_silence_analysis=enable_silence_analysis,
                     )
                     status.update(label="Analysis complete", state="complete")
                 st.rerun()
