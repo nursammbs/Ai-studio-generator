@@ -16,7 +16,7 @@ def tiny_wav() -> bytes:
         wav.setnchannels(1)
         wav.setsampwidth(2)
         wav.setframerate(24000)
-        wav.writeframes(b"\x00\x00" * 2400)
+        wav.writeframes(b"\x00\x00" * 24000)
     return output.getvalue()
 
 
