@@ -39,7 +39,7 @@ class RenderedOutputQualityTests(unittest.TestCase):
         write_srt(words, 1.0, 9.0, subtitle)
         render_clip(
             source, Candidate(1.0, 9.0, "Synthetic QA clip.", 80.0, ["CI render"]),
-            subtitle, output, width=360, height=640,
+            subtitle, output, width=720, height=1280,
             caption_font_size=30, caption_margin_v=80,
             framing="center_crop", transition="fade",
         )
@@ -47,7 +47,7 @@ class RenderedOutputQualityTests(unittest.TestCase):
         media = validate_rendered_clip(output, 8.0)
         video = next(s for s in media["streams"] if s["codec_type"] == "video")
         audio = next(s for s in media["streams"] if s["codec_type"] == "audio")
-        self.assertEqual((video["width"], video["height"]), (360, 640))
+        self.assertEqual((video["width"], video["height"]), (720, 1280))
         self.assertTrue(audio.get("codec_name") in {"aac", "mp3", "opus"})
         self.assertGreater(output.stat().st_size, 10_000)
         srt = subtitle.read_text(encoding="utf-8")
