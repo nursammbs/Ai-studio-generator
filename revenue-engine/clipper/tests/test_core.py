@@ -118,7 +118,7 @@ class ClipperCoreTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             target = write_srt(words, 0, cursor, Path(folder) / "clip.srt")
             content = target.read_text(encoding="utf-8")
-        cue_blocks = [block for block in content.strip().split("\\n\\n") if block.strip()]
+        cue_blocks = [block for block in content.strip().split("\n\n") if block.strip()]
         captions = [" ".join(block.splitlines()[2:]) for block in cue_blocks]
 
         self.assertIn(
