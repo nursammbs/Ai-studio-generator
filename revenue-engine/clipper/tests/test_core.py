@@ -102,6 +102,42 @@ class ClipperCoreTests(unittest.TestCase):
             )
         self.assertTrue(captions[-1].endswith("weather."))
 
+    def test_srt_keeps_common_continuations_together(self):
+        sentence = (
+            "Scientists are working to better be able to predict space weather "
+            "because it directly affects the safety of our satellites, health of "
+            "our astronauts, and the technologies that we use every day in our life "
+            "like GPS navigation."
+        )
+        words = []
+        cursor = 0.0
+        for token in sentence.split():
+            words.append(Word(token, cursor, cursor + 0.28))
+            cursor += 0.28
+
+        with tempfile.TemporaryDirectory() as folder:
+            target = write_srt(words, 0, cursor, Path(folder) / "clip.srt")
+            content = target.read_text(encoding="utf-8")
+        cue_blocks = [block for block in content.strip().split("\\n\\n") if block.strip()]
+        captions = [" ".join(block.splitlines()[2:]) for block in cue_blocks]
+
+        self.assertIn(
+            "Scientists are working to better be able to predict space weather",
+            captions[0],
+        )
+        self.assertIn(
+            "because it directly affects the safety of our satellites,",
+            captions[1],
+        )
+        self.assertTrue(captions[-1].endswith("navigation."))
+        for caption in captions[:-1]:
+            final_word = caption.split()[-1].strip(".,;:!?").lower()
+            self.assertNotIn(
+                final_word,
+                {"able", "directly", "every", "whole", "what"},
+                msg=f"Caption breaks a common phrase at {caption!r}",
+            )
+
     def test_caption_cues_keep_speaker_identity_across_phrase_splits(self):
         words = [
             Word("First", 0.0, 0.2, "Speaker 1"),
