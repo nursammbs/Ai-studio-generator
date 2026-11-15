@@ -10,6 +10,9 @@ import tempfile
 import time
 import unittest
 import urllib.request
+
+import numpy as np
+from PIL import Image
 from pathlib import Path
 
 from reframing import detect_subject_center
@@ -137,6 +140,7 @@ class RealVideoSmokeTests(unittest.TestCase):
                 review_video = review_dir / "nasa-selected-clip.mp4"
                 review_srt = review_dir / "nasa-selected-clip.srt"
                 review_frame = review_dir / "nasa-review-frame.jpg"
+                baseline_frame = review_dir / "nasa-caption-baseline-frame.jpg"
                 shutil.copy2(output, review_video)
                 shutil.copy2(subtitle, review_srt)
                 sample_time = min(3.0, max(0.5, (chosen.end - chosen.start) / 2))
@@ -145,6 +149,32 @@ class RealVideoSmokeTests(unittest.TestCase):
                     "-ss", f"{sample_time:.3f}", "-i", str(review_video),
                     "-frames:v", "1", str(review_frame),
                 ], check=True, capture_output=True, timeout=30)
+
+                # Compare the rendered frame with the same source frame after portrait
+                # cropping but without captions. This verifies that timed SRT captions
+                # are actually burned into the lower caption-safe area on real WebM.
+                center_x, center_y = subject_center
+                baseline_filter = (
+                    "scale=1080:1920:force_original_aspect_ratio=increase,"
+                    f"crop=1080:1920:min(max(iw*{center_x:.5f}-540\\\\,0)\\\\,iw-1080):"
+                    f"min(max(ih*{center_y:.5f}-960\\\\,0)\\\\,ih-1920)"
+                )
+                subprocess.run([
+                    "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+                    "-ss", f"{chosen.start:.3f}", "-i", str(source),
+                    "-ss", f"{sample_time:.3f}", "-vf", baseline_filter,
+                    "-frames:v", "1", str(baseline_frame),
+                ], check=True, capture_output=True, timeout=30)
+                rendered_pixels = np.asarray(Image.open(review_frame).convert("RGB"), dtype=np.int16)
+                baseline_pixels = np.asarray(Image.open(baseline_frame).convert("RGB"), dtype=np.int16)
+                self.assertEqual(rendered_pixels.shape, baseline_pixels.shape)
+                lower_region = slice(int(rendered_pixels.shape[0] * 0.68), int(rendered_pixels.shape[0] * 0.95))
+                pixel_delta = np.abs(rendered_pixels[lower_region] - baseline_pixels[lower_region])
+                caption_pixel_fraction = float(np.mean(np.max(pixel_delta, axis=2) > 40))
+                self.assertGreater(
+                    caption_pixel_fraction, 0.005,
+                    "No visible caption pixels were detected in the lower caption-safe area; check seek timestamps and SRT burn-in.",
+                )
                 (review_dir / "nasa-review-report.json").write_text(json.dumps({
                     "status": "PASS",
                     "source": "NASA GSFC Sarah Jones interview",
@@ -163,6 +193,11 @@ class RealVideoSmokeTests(unittest.TestCase):
                     "framing": {
                         "mode": "subject_focus",
                         "detected_face_center": list(subject_center),
+                    },
+                    "caption_render_check": {
+                        "lower_region_changed_pixel_fraction": round(caption_pixel_fraction, 5),
+                        "threshold": 0.005,
+                        "status": "PASS",
                     },
                     "render": {
                         "width": video_stream["width"],
