@@ -1,0 +1,2 @@
+# Optional visual scene detection; keeps the default CPU transcription install lean.
+scenedetect[opencv]>=0.7.3,<0.8
