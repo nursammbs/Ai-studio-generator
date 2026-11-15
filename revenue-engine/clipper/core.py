@@ -328,7 +328,7 @@ _WEAK_CAPTION_ENDINGS = {
     "able", "affects", "already", "also", "another", "better", "be", "directly",
     "each", "even", "every", "few", "it", "just", "less", "many", "more",
     "most", "much", "only", "other", "predict", "really", "some", "space",
-    "still", "such", "very", "whole,
+    "still", "such", "very", "whole",
 }
 _WEAK_CAPTION_STARTS = {
     "a", "an", "as", "at", "because", "by", "for", "from", "if",
