@@ -71,6 +71,53 @@ class ClipperCoreTests(unittest.TestCase):
         self.assertIn("I really learned something\nimportant today.", content)
         self.assertEqual(content.count("-->"), 1)
 
+    def test_srt_breaks_on_natural_phrases_not_function_words(self):
+        sentence = (
+            "Gold measures the upper atmosphere, which is directly affected "
+            "by the sun, and what we call space weather."
+        )
+        words = []
+        cursor = 0.0
+        for token in sentence.split():
+            words.append(Word(token, cursor, cursor + 0.28))
+            cursor += 0.28
+
+        with tempfile.TemporaryDirectory() as folder:
+            target = write_srt(words, 0, cursor, Path(folder) / "clip.srt")
+            content = target.read_text(encoding="utf-8")
+        cue_blocks = [block for block in content.strip().split("\\n\\n") if block.strip()]
+        captions = [" ".join(block.splitlines()[2:]) for block in cue_blocks]
+
+        self.assertGreaterEqual(len(captions), 3)
+        self.assertIn("Gold measures the upper atmosphere,", captions[0])
+        self.assertIn("affected by the sun,", " ".join(captions))
+        for caption in captions[:-1]:
+            final_word = caption.split()[-1].strip(".,;:!?").lower()
+            self.assertNotIn(
+                final_word,
+                {"a", "an", "and", "are", "as", "at", "be", "because", "by",
+                 "for", "from", "in", "is", "of", "on", "or", "that", "the",
+                 "to", "what", "which", "who", "with"},
+                msg=f"Caption ends on an incomplete function word: {caption!r}",
+            )
+        self.assertTrue(captions[-1].endswith("weather."))
+
+    def test_caption_cues_keep_speaker_identity_across_phrase_splits(self):
+        words = [
+            Word("First", 0.0, 0.2, "Speaker 1"),
+            Word("speaker.", 0.2, 0.5, "Speaker 1"),
+            Word("Second", 1.0, 1.2, "Speaker 2"),
+            Word("speaker.", 1.2, 1.5, "Speaker 2"),
+        ]
+        with tempfile.TemporaryDirectory() as folder:
+            target = write_srt(
+                words, 0, 2, Path(folder) / "clip.srt",
+                include_speaker_labels=True,
+            )
+            content = target.read_text(encoding="utf-8")
+        self.assertIn("Speaker 1: First speaker.", content)
+        self.assertIn("Speaker 2: Second speaker.", content)
+
     def test_srt_normalizes_spaces_before_punctuation(self):
         words = [
             Word("Gold", 0.0, 0.3),
