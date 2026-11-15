@@ -40,7 +40,7 @@ class RenderedOutputQualityTests(unittest.TestCase):
         render_clip(
             source, Candidate(1.0, 9.0, "Synthetic QA clip.", 80.0, ["CI render"]),
             subtitle, output, width=720, height=1280,
-            caption_font_size=30, caption_margin_v=80,
+            caption_font_size=14, caption_margin_v=24,
             framing="center_crop", transition="fade",
         )
 
