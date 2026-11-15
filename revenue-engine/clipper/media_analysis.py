@@ -17,7 +17,7 @@ def detect_scenes(video_path: str | Path, threshold: float = 27.0, min_scene_sec
     except ImportError:
         return {"available": False, "scenes": [], "message": "Install requirements-media.txt to enable PySceneDetect."}
 
-    raw = detect(str(source), ContentDetector(threshold=threshold), show_progress=False)
+    raw = detect(str(source), ContentDetector(threshold=threshold))
     scenes = []
     for start, end in raw:
         start_s, end_s = float(start.get_seconds()), float(end.get_seconds())
