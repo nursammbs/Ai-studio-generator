@@ -335,7 +335,7 @@ _WEAK_CAPTION_STARTS = {
 
 
 def _caption_token(text: str) -> str:
-    return re.sub(r"^[^\\w']+|[^\\w']+$", "", text.casefold())
+    return re.sub(r"^[^\w']+|[^\w']+$", "", text.casefold())
 
 
 def _caption_segment_groups(segment: list[Word]) -> list[list[Word]]:
