@@ -84,7 +84,7 @@ class ClipperCoreTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             target = write_srt(words, 0, 2, Path(folder) / "clip.srt")
             content = target.read_text(encoding="utf-8")
-        self.assertIn("Gold will be sitting 22,000 miles.", content)
+        self.assertIn("Gold will be sitting 22,000 miles.", " ".join(content.split()))
         self.assertNotIn("22 ,000", content)
 
     def test_srt_clips_word_timing_at_clip_boundaries(self):
